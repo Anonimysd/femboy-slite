@@ -1,1070 +1,1105 @@
--- =====================================================
--- KULTURNIY.VISUAL v8.0 — ОКОННЫЙ ИНТЕРФЕЙС
--- Закрыть, свернуть, развернуть, перемещение
--- Мягкие ползунки, пассивная защита
--- Для Garry's Mod
--- =====================================================
 
-if CLIENT then
-
-    -- =====================================================
-    -- БЛОК 0: ПАССИВНАЯ ЗАЩИТА
-    -- =====================================================
-    KV = KV or {}
-    KV.AntiDetect = {}
-
-    local orig_GetPos = Entity.GetPos
-    local orig_GetVelocity = Entity.GetVelocity
-    local orig_RunConsoleCommand = RunConsoleCommand
-    local orig_hook_Add = hook.Add
-    local orig_hook_Remove = hook.Remove
-    local orig_PrintMessage = PrintMessage
-
-    local realPos = Vector(0,0,0)
-    local spoofedPos = Vector(0,0,0)
-
-    hook.Add("Think", "KV_SpoofPos", function()
-        local ply = LocalPlayer()
-        if not IsValid(ply) then return end
-        local currentPos = ply:GetPos()
-        if not currentPos then return end
-        realPos = currentPos
-        local offset = Vector(
-            math.sin(RealTime() * 0.7) * 0.05,
-            math.cos(RealTime() * 0.5) * 0.05,
-            math.sin(RealTime() * 0.3) * 0.025
-        )
-        spoofedPos = currentPos + offset
-    end)
-
-    local old_GetPos = Entity.GetPos
-    Entity.GetPos = function(ent)
-        if ent == LocalPlayer() then
-            if debug and debug.getinfo(2) and debug.getinfo(2).name == "GetPos" then
-                return spoofedPos
-            end
-            return realPos
-        end
-        return old_GetPos(ent)
-    end
-
-    local kv_hooks = {}
-    hook.Add = function(name, id, func, ...)
-        if id == "KV_SpoofPos" or id == "arms_update" or id == "weapon_color" or id == "KV_ApplySky" then
-            local fakeId = "Think_" .. tostring(math.random(1000, 9999))
-            kv_hooks[fakeId] = { name = name, id = id, func = func }
-            return orig_hook_Add(name, fakeId, func, ...)
-        end
-        return orig_hook_Add(name, id, func, ...)
-    end
-
-    hook.Remove = function(name, id)
-        for fakeId, data in pairs(kv_hooks) do
-            if data.id == id then return end
-        end
-        return orig_hook_Remove(name, id)
-    end
-
-    local old_ConCommand = RunConsoleCommand
-    RunConsoleCommand = function(cmd, ...)
-        local blockedCmds = {
-            "sv_cheats", "r_drawothermodels", "r_drawentities",
-            "mat_wireframe", "cl_drawhud", "sv_allowcslua"
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🌸 KULTURNIY.VISUAL v8.0 — Демо</title>
+    <style>
+        /* ===== БАЗА ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
         }
-        for _, blocked in ipairs(blockedCmds) do
-            if string.find(cmd, blocked) then return end
-        end
-        return old_ConCommand(cmd, ...)
-    end
-
-    PrintMessage = function(type, msg)
-        if type == HUD_PRINTCONSOLE or type == HUD_PRINTTALK then
-            if string.find(msg, "ban") or string.find(msg, "kick") or string.find(msg, "античит") then
-                return
-            end
-        end
-        return orig_PrintMessage(type, msg)
-    end
-
-    timer.Simple(0.5, function()
-        LocalPlayer():ChatPrint("[KV] 🛡️ Пассивная защита активирована")
-    end)
-
-    -- =====================================================
-    -- БЛОК 1: ЯДРО
-    -- =====================================================
-    KV.Core = KV.Core or {}
-
-    KV.Core.ColorCache = {}
-    function KV.Core:GetCachedColor(r, g, b, a)
-        r = r or 255; g = g or 255; b = b or 255; a = a or 255
-        local key = string.format("%d_%d_%d_%d", r, g, b, a)
-        if not self.ColorCache[key] then
-            self.ColorCache[key] = Color(r, g, b, a)
-        end
-        return self.ColorCache[key]
-    end
-
-    KV.Core.timers = {}
-    function KV.Core:CreateTimer(name, interval, func)
-        self.timers[name] = { interval = interval, func = func, last = 0 }
-    end
-
-    function KV.Core:UpdateTimers()
-        local cur = RealTime()
-        for name, t in pairs(self.timers) do
-            if cur - t.last >= t.interval then
-                t.last = cur
-                t.func()
-            end
-        end
-    end
-
-    -- =====================================================
-    -- БЛОК 2: КОНФИГИ
-    -- =====================================================
-    KV.Config = KV.Config or {}
-    KV.Config.defaults = {
-        enabled = true,
-        sky_r = 100,
-        sky_g = 150,
-        sky_b = 200,
-        arms_len = 1.0,
-        hit_sound = "meow",
-        hit_vol = 0.5,
-        crosshair = "dot",
-        weapon_r = 255,
-        weapon_g = 100,
-        weapon_b = 200,
-        click_vol = 0.3,
-        click_sound = "soft",
-        fov = 90,
-        custom_hit_sound = nil,
-        binds = {},
-        binds_active = {},
-        texture_blur = 0.5,
-        window_x = 50,
-        window_y = 50,
-        window_minimized = false,
-    }
-
-    KV.Config.data = {}
-    KV.Config.profile = "default"
-
-    function KV.Config:Init()
-        for k, v in pairs(self.defaults) do
-            self.data[k] = v
-        end
-        self:Load()
-    end
-
-    function KV.Config:Get(key, default)
-        if self.data[key] ~= nil then return self.data[key] end
-        return default or self.defaults[key]
-    end
-
-    function KV.Config:Set(key, value)
-        self.data[key] = value
-        self:Save()
-    end
-
-    function KV.Config:Save()
-        local path = "kv_config_" .. self.profile .. ".json"
-        local json = util.TableToJSON(self.data, true)
-        file.Write(path, json)
-    end
-
-    function KV.Config:Load()
-        local path = "kv_config_" .. self.profile .. ".json"
-        if file.Exists(path, "DATA") then
-            local json = file.Read(path, "DATA")
-            local data = util.JSONToTable(json)
-            if data then
-                for k, v in pairs(data) do
-                    self.data[k] = v
-                end
-                self:ApplyAll()
-                return true
-            end
-        end
-        return false
-    end
-
-    function KV.Config:ApplyAll()
-        if KV.Visual then
-            KV.Visual:UpdateSky(self:Get("sky_r"), self:Get("sky_g"), self:Get("sky_b"))
-            KV.Visual:UpdateArms(self:Get("arms_len"))
-            KV.Visual:UpdateWeaponColor(self:Get("weapon_r"), self:Get("weapon_g"), self:Get("weapon_b"))
-            KV.Visual:SetFOV(self:Get("fov"))
-            KV.Visual:ApplyTextureBlur(self:Get("texture_blur"))
-        end
-        if KV.Audio and self:Get("custom_hit_sound") then
-            KV.Audio:LoadCustomSound(self:Get("custom_hit_sound"))
-        end
-    end
-
-    KV.Config:Init()
-
-    -- =====================================================
-    -- БЛОК 3: ВИЗУАЛЫ
-    -- =====================================================
-    KV.Visual = KV.Visual or {}
-
-    local ply = LocalPlayer
-    local scrW, scrH = ScrW, ScrH
-
-    function KV.Visual:ApplyTextureBlur(level)
-        level = math.Clamp(level or 0, 0, 1)
-        KV.Config:Set("texture_blur", level)
-        local quality = 1.0 - level * 0.7
-        quality = math.Clamp(quality, 0.3, 1.0)
-        render.SetTextureQuality(quality)
-    end
-
-    function KV.Visual:SetFOV(fov)
-        fov = math.Clamp(fov or 90, 60, 120)
-        GetConVar("fov_desired"):SetFloat(fov)
-        GetConVar("fov"):SetFloat(fov)
-        KV.Config:Set("fov", fov)
-    end
-
-    local skyColor = Color(100, 150, 200, 255)
-    local skyDirty = true
-
-    function KV.Visual:UpdateSky(r, g, b)
-        r = r or KV.Config:Get("sky_r", 100)
-        g = g or KV.Config:Get("sky_g", 150)
-        b = b or KV.Config:Get("sky_b", 200)
-        skyColor = KV.Core:GetCachedColor(r, g, b, 255)
-        KV.Config:Set("sky_r", r)
-        KV.Config:Set("sky_g", g)
-        KV.Config:Set("sky_b", b)
-        skyDirty = true
-    end
-
-    hook.Add("Think", "KV_ApplySky", function()
-        if skyDirty then
-            render.SetColorModulation(skyColor.r/255, skyColor.g/255, skyColor.b/255)
-            local env = ents.FindByClass("env_sky")[1]
-            if IsValid(env) then
-                env:SetColor(skyColor)
-            end
-            skyDirty = false
-        end
-    end)
-
-    local currentArmsLen = 1.0
-
-    function KV.Visual:UpdateArms(len)
-        len = len or KV.Config:Get("arms_len", 1.0)
-        currentArmsLen = len
-        KV.Config:Set("arms_len", len)
-    end
-
-    KV.Core:CreateTimer("arms_update", 2, function()
-        local len = KV.Config:Get("arms_len", 1.0)
-        if currentArmsLen ~= len then
-            currentArmsLen = len
-            local vm = ply():GetViewModel()
-            if IsValid(vm) then
-                vm:SetModelScale(Vector(len, len, len), 0)
-            end
-        end
-    end)
-
-    local weaponColor = Color(255, 255, 255, 255)
-
-    function KV.Visual:UpdateWeaponColor(r, g, b)
-        r = r or KV.Config:Get("weapon_r", 255)
-        g = g or KV.Config:Get("weapon_g", 255)
-        b = b or KV.Config:Get("weapon_b", 255)
-        weaponColor = KV.Core:GetCachedColor(r, g, b, 255)
-        KV.Config:Set("weapon_r", r)
-        KV.Config:Set("weapon_g", g)
-        KV.Config:Set("weapon_b", b)
-    end
-
-    KV.Core:CreateTimer("weapon_color", 3, function()
-        local wep = ply():GetActiveWeapon()
-        if IsValid(wep) then
-            wep:SetColor(weaponColor)
-        end
-    end)
-
-    function KV.Visual:DrawCrosshair()
-        if not KV.Config:Get("enabled", true) then return end
-        local type = KV.Config:Get("crosshair", "dot")
-        local x, y = scrW()/2, scrH()/2
-        local color = KV.Core:GetCachedColor(255, 255, 255, 200)
-
-        surface.SetDrawColor(color)
-        if type == "dot" then
-            surface.DrawRect(x-3, y-3, 6, 6)
-        elseif type == "cross" then
-            surface.DrawRect(x-2, y-10, 4, 20)
-            surface.DrawRect(x-10, y-2, 20, 4)
-        elseif type == "circle" then
-            surface.DrawOutlinedCircle(x, y, 10, 0, 1)
-        elseif type == "check" then
-            surface.DrawLine(x-10, y+2, x-2, y+10)
-            surface.DrawLine(x-2, y+10, x+10, y-10)
-        elseif type == "star" then
-            for i=1,5 do
-                local angle = math.rad(72 * i - 90)
-                surface.DrawLine(x, y, x + math.cos(angle)*14, y + math.sin(angle)*14)
-            end
-        end
-    end
-
-    hook.Add("PostDrawHUD", "KV_Crosshair", function()
-        KV.Visual:DrawCrosshair()
-    end)
-
-    timer.Simple(0.5, function()
-        KV.Visual:ApplyTextureBlur(KV.Config:Get("texture_blur", 0.5))
-        KV.Visual:SetFOV(KV.Config:Get("fov", 90))
-    end)
-
-    -- =====================================================
-    -- БЛОК 4: АУДИО
-    -- =====================================================
-    KV.Audio = KV.Audio or {}
-
-    KV.Audio.clickSounds = {
-        soft = "buttons/lightswitch2.wav",
-        tap = "buttons/button14.wav",
-        bubble = "ambient/water/water_drip2.wav",
-        whisper = "npc/turretfloor/turret_activate.wav",
-    }
-
-    KV.Audio.hitSounds = {
-        meow = "npc/ichthyosaur/ichthyosplat.wav",
-        fart = "npc/antlion_grub/squish.wav",
-        moan = "npc/fast_zombie/agony1.wav",
-        kiss = "npc/zombie/zombie_voice_idle1.wav",
-    }
-
-    KV.Audio.customHitSound = nil
-
-    function KV.Audio:Play(soundPath, volume, pitch)
-        if not soundPath then return end
-        volume = math.Clamp(volume or 0.5, 0, 1)
-        pitch = pitch or 100
-        local emitter = ents.Create("env_sound")
-        if IsValid(emitter) then
-            emitter:SetPos(LocalPlayer():GetPos())
-            emitter:Spawn()
-            emitter:EmitSound(soundPath, 75, pitch, volume)
-            timer.Simple(0.2, function()
-                if IsValid(emitter) then emitter:Remove() end
-            end)
-        end
-    end
-
-    function KV.Audio:LoadCustomSound(filePath)
-        if not filePath or not file.Exists(filePath, "DATA") then
-            LocalPlayer():ChatPrint("[KV] Файл не найден")
-            return false
-        end
-        local ext = string.lower(string.sub(filePath, -3))
-        if ext ~= "mp3" and ext ~= "wav" then
-            LocalPlayer():ChatPrint("[KV] Только MP3 или WAV")
-            return false
-        end
-        util.PrecacheSound(filePath)
-        KV.Audio.customHitSound = filePath
-        KV.Config:Set("custom_hit_sound", filePath)
-        LocalPlayer():ChatPrint("[KV] Звук загружен: " .. filePath)
-        return true
-    end
-
-    function KV.Audio:PlayClick()
-        local sound = KV.Audio.clickSounds[KV.Config:Get("click_sound", "soft")]
-        if sound then
-            KV.Audio:Play(sound, KV.Config:Get("click_vol", 0.3))
-        end
-    end
-
-    hook.Add("EntityTakeDamage", "KV_HitSound", function(ent, dmg)
-        if not KV.Config:Get("enabled", true) then return end
-        if ent == LocalPlayer() and dmg:GetAttacker():IsPlayer() then
-            local sound = KV.Audio.customHitSound or KV.Audio.hitSounds[KV.Config:Get("hit_sound", "meow")]
-            if sound then
-                KV.Audio:Play(sound, KV.Config:Get("hit_vol", 0.5))
-            end
-        end
-    end)
-
-    -- =====================================================
-    -- БЛОК 5: БИНДЫ
-    -- =====================================================
-    KV.Binds = KV.Binds or {}
-    KV.Binds.list = {}
-    KV.Binds.active = {}
-
-    function KV.Binds:Load()
-        local binds = KV.Config:Get("binds", {})
-        self.list = {}
-        for key, cmd in pairs(binds) do
-            self.list[key] = cmd
-        end
-        self:ApplyAll()
-    end
-
-    function KV.Binds:Add(key, cmd)
-        if not key or not cmd then return false end
-        self.list[key] = cmd
-        self:Save()
-        self:Apply(key)
-        return true
-    end
-
-    function KV.Binds:Remove(key)
-        if self.list[key] then
-            self.list[key] = nil
-            self:Save()
-            self:RemoveBind(key)
-            return true
-        end
-        return false
-    end
-
-    function KV.Binds:Toggle(key)
-        if self.active[key] then
-            self.active[key] = nil
-            self:RemoveBind(key)
-        else
-            self.active[key] = true
-            self:Apply(key)
-        end
-        self:SaveActive()
-    end
-
-    function KV.Binds:Apply(key)
-        local cmd = self.list[key]
-        if not cmd then return end
-        self:RemoveBind(key)
-        RunConsoleCommand("bind", key, cmd)
-        self.active[key] = true
-    end
-
-    function KV.Binds:ApplyAll()
-        for key, cmd in pairs(self.list) do
-            if self.active[key] == nil or self.active[key] == true then
-                self:Apply(key)
-            end
-        end
-    end
-
-    function KV.Binds:RemoveBind(key)
-        RunConsoleCommand("unbind", key)
-        self.active[key] = nil
-    end
-
-    function KV.Binds:Save()
-        KV.Config:Set("binds", self.list)
-    end
-
-    function KV.Binds:SaveActive()
-        local active = {}
-        for key, val in pairs(self.active) do
-            if val then active[key] = true end
-        end
-        KV.Config:Set("binds_active", active)
-    end
-
-    function KV.Binds:LoadActive()
-        local active = KV.Config:Get("binds_active", {})
-        for key, val in pairs(active) do
-            if val then self.active[key] = true end
-        end
-    end
-
-    timer.Simple(1, function()
-        KV.Binds:Load()
-        KV.Binds:LoadActive()
-        KV.Binds:ApplyAll()
-    end)
-
-    -- =====================================================
-    -- БЛОК 6: КАСТОМНЫЙ ПОЛЗУНОК
-    -- =====================================================
-    local function CreateSoftSlider(parent, text, x, y, min, max, value, onChange, decimals)
-        decimals = decimals or 0
-
-        local container = vgui.Create("DPanel", parent)
-        container:SetPos(x, y)
-        container:SetSize(280, 35)
-        container.Paint = function() end
-
-        local label = vgui.Create("DLabel", container)
-        label:SetPos(0, 0)
-        label:SetSize(100, 20)
-        label:SetText(text)
-        label:SetFont("DermaDefault")
-        label:SetTextColor(Color(220, 200, 230))
-        label:SizeToContents()
-
-        local slider = vgui.Create("DScrollBar", container)
-        slider:SetPos(5, 20)
-        slider:SetSize(200, 10)
-        slider:SetMin(min)
-        slider:SetMax(max)
-        slider:SetValue(value)
-        slider:SetDecimals(decimals)
-        slider:SetWide(10)
-
-        slider.Paint = function(self, w, h)
-            draw.RoundedBox(5, 0, 0, w, h, Color(50, 40, 60, 200))
-            local percent = (self:GetValue() - self:GetMin()) / (self:GetMax() - self:GetMin())
-            local filled = percent * w
-            draw.RoundedBox(5, 0, 0, filled, h, Color(160, 80, 200, 220))
-            local knobX = filled
-            local knobY = h / 2
-            local knobRadius = 8
-            draw.RoundedBox(knobRadius, knobX - knobRadius + 2, knobY - knobRadius + 2, knobRadius * 2, knobRadius * 2, Color(0, 0, 0, 80))
-            draw.RoundedBox(knobRadius, knobX - knobRadius, knobY - knobRadius, knobRadius * 2, knobRadius * 2, Color(220, 130, 255, 240))
-            draw.RoundedBox(knobRadius - 2, knobX - knobRadius + 2, knobY - knobRadius + 2, knobRadius - 2, knobRadius - 2, Color(255, 200, 255, 120))
-        end
-
-        local valueLabel = vgui.Create("DLabel", container)
-        valueLabel:SetPos(210, 18)
-        valueLabel:SetSize(50, 20)
-        valueLabel:SetText(string.format("%." .. decimals .. "f", value))
-        valueLabel:SetFont("DermaDefault")
-        valueLabel:SetTextColor(Color(200, 180, 220))
-        valueLabel:SetContentAlignment(5)
-
-        slider.OnValueChanged = function(val)
-            local rounded = tonumber(string.format("%." .. decimals .. "f", val))
-            valueLabel:SetText(string.format("%." .. decimals .. "f", rounded))
-            onChange(rounded)
-            KV.Audio:PlayClick()
-        end
-
-        return slider
-    end
-
-    -- =====================================================
-    -- БЛОК 7: ОКОННОЕ МЕНЮ (С ЗАКРЫТИЕМ, СВОРАЧИВАНИЕМ, ПЕРЕМЕЩЕНИЕМ)
-    -- =====================================================
-    KV.Main = KV.Main or {}
-
-    local windowFrame = nil
-    local titleBar = nil
-    local minimizeBtn = nil
-    local maximizeBtn = nil
-    local closeBtn = nil
-    local isMinimized = false
-    local isMaximized = false
-
-    -- Свернутая полоска
-    local miniBar = nil
-    local miniBarDragging = false
-    local miniBarDragX = 0
-    local miniBarDragY = 0
-
-    function KV.Main:UpdateWindowPosition(x, y)
-        KV.Config:Set("window_x", x)
-        KV.Config:Set("window_y", y)
-    end
-
-    function KV.Main:CreateMinimizedBar()
-        if IsValid(miniBar) then return end
-
-        miniBar = vgui.Create("DPanel")
-        miniBar:SetSize(200, 36)
-        miniBar:SetPos(KV.Config:Get("window_x", 50), KV.Config:Get("window_y", 50))
-        miniBar.Paint = function(self, w, h)
-            draw.RoundedBox(18, 0, 0, w, h, Color(35, 25, 50, 230))
-            draw.RoundedBox(18, 1, 1, w-2, h-2, Color(50, 35, 70, 100))
-            -- Свечение
-            draw.RoundedBox(18, 0, 0, w, h, Color(160, 80, 200, 30))
-        end
-
-        -- Заголовок на полоске
-        local label = vgui.Create("DLabel", miniBar)
-        label:SetPos(20, 6)
-        label:SetSize(160, 24)
-        label:SetText("🌸 KULTURNIY.VISUAL")
-        label:SetFont("DermaDefaultBold")
-        label:SetTextColor(Color(255, 180, 230))
-        label:SetContentAlignment(4)
-
-        -- Кнопка развернуть на полоске
-        local restoreBtn = vgui.Create("DButton", miniBar)
-        restoreBtn:SetPos(160, 4)
-        restoreBtn:SetSize(28, 28)
-        restoreBtn:SetText("⬛")
-        restoreBtn:SetFont("DermaDefaultBold")
-        restoreBtn:SetTextColor(Color(200, 200, 220))
-        restoreBtn.Paint = function(self, w, h)
-            draw.RoundedBox(10, 0, 0, w, h, Color(60, 40, 80, 200))
-        end
-        restoreBtn.DoClick = function()
-            KV.Main:RestoreFromMinimized()
-        end
-
-        -- Перемещение полоски
-        miniBar.OnMousePressed = function(self, code)
-            if code == MOUSE_LEFT then
-                miniBarDragging = true
-                local x, y = gui.MousePos()
-                miniBarDragX = x - self:GetPos()
-                miniBarDragY = y - self:GetPos()
-            end
-        end
-
-        miniBar.OnMouseReleased = function(self, code)
-            if code == MOUSE_LEFT then
-                miniBarDragging = false
-                KV.Main:UpdateWindowPosition(self:GetPos())
-            end
-        end
-
-        miniBar.Think = function(self)
-            if miniBarDragging and input.IsMouseDown(MOUSE_LEFT) then
-                local x, y = gui.MousePos()
-                local newX = math.max(0, math.min(ScrW() - self:GetWide(), x - miniBarDragX))
-                local newY = math.max(0, math.min(ScrH() - self:GetTall(), y - miniBarDragY))
-                self:SetPos(newX, newY)
-                KV.Main:UpdateWindowPosition(newX, newY)
-            end
-        end
-
-        miniBar:MakePopup()
-        miniBar:SetKeyboardInputEnabled(false)
-        miniBar:SetMouseInputEnabled(true)
-    end
-
-    function KV.Main:RestoreFromMinimized()
-        if IsValid(miniBar) then
-            local x, y = miniBar:GetPos()
-            miniBar:Close()
-            miniBar = nil
-        end
-        isMinimized = false
-        KV.Config:Set("window_minimized", false)
-        self:Open(x, y)
-    end
-
-    function KV.Main:Open(x, y)
-        if IsValid(windowFrame) then
-            windowFrame:Close()
-            windowFrame = nil
-        end
-
-        if IsValid(miniBar) then
-            miniBar:Close()
-            miniBar = nil
-        end
-
-        local posX = x or KV.Config:Get("window_x", 50)
-        local posY = y or KV.Config:Get("window_y", 50)
-
-        windowFrame = vgui.Create("DFrame")
-        windowFrame:SetSize(740, 620)
-        windowFrame:SetPos(posX, posY)
-        windowFrame:SetTitle("")
-        windowFrame:SetDraggable(false)
-        windowFrame:ShowCloseButton(false)
-        windowFrame:SetSizable(false)
-        windowFrame:MakePopup()
-        windowFrame.Paint = function(self, w, h)
-            draw.RoundedBox(20, 0, 0, w, h, Color(20, 15, 30, 235))
-            draw.RoundedBox(20, 0, 0, w, 40, Color(60, 30, 80, 220))
-        end
-
-        -- Заголовок
-        local titleLabel = vgui.Create("DLabel", windowFrame)
-        titleLabel:SetPos(20, 8)
-        titleLabel:SetSize(200, 24)
-        titleLabel:SetText("🌸 KULTURNIY.VISUAL v8.0")
-        titleLabel:SetFont("DermaDefaultBold")
-        titleLabel:SetTextColor(Color(255, 180, 230))
-
-        -- Перемещение окна (за верхнюю панель)
-        local dragPanel = vgui.Create("DPanel", windowFrame)
-        dragPanel:SetPos(0, 0)
-        dragPanel:SetSize(740, 40)
-        dragPanel.Paint = function() end
-        dragPanel:SetMouseInputEnabled(true)
-        dragPanel:SetDrag(true)
-        dragPanel.Drag = function(self, x, y)
-            local newX = math.max(0, math.min(ScrW() - windowFrame:GetWide(), x))
-            local newY = math.max(0, math.min(ScrH() - windowFrame:GetTall(), y))
-            windowFrame:SetPos(newX, newY)
-            KV.Main:UpdateWindowPosition(newX, newY)
-        end
-
-        -- Кнопка свернуть
-        minimizeBtn = vgui.Create("DButton", windowFrame)
-        minimizeBtn:SetPos(640, 6)
-        minimizeBtn:SetSize(28, 28)
-        minimizeBtn:SetText("—")
-        minimizeBtn:SetFont("DermaDefaultBold")
-        minimizeBtn:SetTextColor(Color(200, 200, 220))
-        minimizeBtn.Paint = function(self, w, h)
-            draw.RoundedBox(10, 0, 0, w, h, Color(50, 40, 70, 200))
-        end
-        minimizeBtn.DoClick = function()
-            isMinimized = true
-            KV.Config:Set("window_minimized", true)
-            local x, y = windowFrame:GetPos()
-            windowFrame:Close()
-            windowFrame = nil
-            KV.Main:CreateMinimizedBar()
-            KV.Audio:PlayClick()
-        end
-
-        -- Кнопка развернуть (масштабировать)
-        maximizeBtn = vgui.Create("DButton", windowFrame)
-        maximizeBtn:SetPos(674, 6)
-        maximizeBtn:SetSize(28, 28)
-        maximizeBtn:SetText("⬛")
-        maximizeBtn:SetFont("DermaDefaultBold")
-        maximizeBtn:SetTextColor(Color(200, 200, 220))
-        maximizeBtn.Paint = function(self, w, h)
-            draw.RoundedBox(10, 0, 0, w, h, Color(50, 60, 70, 200))
-        end
-        maximizeBtn.DoClick = function()
-            if isMaximized then
-                windowFrame:SetSize(740, 620)
-                windowFrame:Center()
-                isMaximized = false
-            else
-                windowFrame:SetSize(ScrW(), ScrH())
-                windowFrame:SetPos(0, 0)
-                isMaximized = true
-            end
-            KV.Audio:PlayClick()
-        end
-
-        -- Кнопка закрыть
-        closeBtn = vgui.Create("DButton", windowFrame)
-        closeBtn:SetPos(708, 6)
-        closeBtn:SetSize(28, 28)
-        closeBtn:SetText("✕")
-        closeBtn:SetFont("DermaDefaultBold")
-        closeBtn:SetTextColor(Color(255, 200, 200))
-        closeBtn.Paint = function(self, w, h)
-            draw.RoundedBox(10, 0, 0, w, h, Color(80, 30, 40, 200))
-        end
-        closeBtn.DoClick = function()
-            if IsValid(windowFrame) then
-                windowFrame:Close()
-                windowFrame = nil
-            end
-            KV.Config:Set("enabled", false)
-            LocalPlayer():ChatPrint("[KV] Визуал выключен")
-            KV.Audio:PlayClick()
-        end
-
-        -- Вкладки
-        local tabs = vgui.Create("DPropertySheet", windowFrame)
-        tabs:SetPos(10, 45)
-        tabs:SetSize(720, 530)
-
-        tabs:AddSheet("🎨 Визуалы", self:CreateVisualTab())
-        tabs:AddSheet("🔊 Звуки", self:CreateAudioTab())
-        tabs:AddSheet("⌨️ Бинды", self:CreateBindsTab())
-        tabs:AddSheet("💾 Конфиги", self:CreateConfigTab())
-
-        -- Кнопка вкл/выкл внизу
-        local toggleBtn = vgui.Create("DButton", windowFrame)
-        toggleBtn:SetPos(20, 580)
-        toggleBtn:SetSize(160, 30)
-        toggleBtn:SetText(KV.Config:Get("enabled") and "✅ Включено" or "❌ Выключено")
-        toggleBtn.Paint = function(self, w, h)
-            draw.RoundedBox(10, 0, 0, w, h, Color(60, 30, 80, 200))
-        end
-        toggleBtn.DoClick = function()
-            local state = not KV.Config:Get("enabled")
-            KV.Config:Set("enabled", state)
-            toggleBtn:SetText(state and "✅ Включено" or "❌ Выключено")
-            KV.Audio:PlayClick()
-        end
-
-        -- Сохраняем позицию при закрытии
-        windowFrame.OnClose = function()
-            local x, y = windowFrame:GetPos()
-            KV.Main:UpdateWindowPosition(x, y)
-        end
-    end
-
-    -- ============================================
-    -- ВКЛАДКИ (без изменений, только вынесены)
-    -- ============================================
-    function KV.Main:CreateVisualTab()
-        local panel = vgui.Create("DPanel")
-        panel:SetSize(720, 530)
-        panel.Paint = function(self, w, h)
-            draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200))
-        end
-
-        local y = 15
-        CreateSoftSlider(panel, "FOV", 20, y, 60, 120, KV.Config:Get("fov", 90), function(val) KV.Visual:SetFOV(val) end, 0)
-        y = y + 45
-        CreateSoftSlider(panel, "Небо R", 20, y, 0, 255, KV.Config:Get("sky_r", 100), function(val) KV.Visual:UpdateSky(val, KV.Config:Get("sky_g"), KV.Config:Get("sky_b")) end)
-        y = y + 45
-        CreateSoftSlider(panel, "Небо G", 20, y, 0, 255, KV.Config:Get("sky_g", 150), function(val) KV.Visual:UpdateSky(KV.Config:Get("sky_r"), val, KV.Config:Get("sky_b")) end)
-        y = y + 45
-        CreateSoftSlider(panel, "Небо B", 20, y, 0, 255, KV.Config:Get("sky_b", 200), function(val) KV.Visual:UpdateSky(KV.Config:Get("sky_r"), KV.Config:Get("sky_g"), val) end)
-        y = y + 50        CreateSoftSlider(panel, "Длина рук", 20, y, 0.5, 2.0, KV.Config:Get("arms_len", 1.0), function(val) KV.Visual:UpdateArms(val) end, 0.01)
-        y = y + 45
-
-        local crossList = { "dot", "cross", "circle", "check", "star" }
-        local crossNames = { "Точка", "Крест", "Круг", "Чека", "Звезда" }
-        for i, name in ipairs(crossNames) do
-            local btn = vgui.Create("DButton", panel)
-            btn:SetPos(20 + (i-1)*110, y)
-            btn:SetSize(100, 28)
-            btn:SetText(name)
-            btn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
-            btn.DoClick = function() KV.Config:Set("crosshair", crossList[i]) KV.Audio:PlayClick() end
-        end
-        y = y + 45
-
-        CreateSoftSlider(panel, "Оружие R", 20, y, 0, 255, KV.Config:Get("weapon_r", 255), function(val) KV.Visual:UpdateWeaponColor(val, KV.Config:Get("weapon_g"), KV.Config:Get("weapon_b")) end)
-        y = y + 45
-        CreateSoftSlider(panel, "Оружие G", 20, y, 0, 255, KV.Config:Get("weapon_g", 100), function(val) KV.Visual:UpdateWeaponColor(KV.Config:Get("weapon_r"), val, KV.Config:Get("weapon_b")) end)
-        y = y + 45
-        CreateSoftSlider(panel, "Оружие B", 20, y, 0, 255, KV.Config:Get("weapon_b", 200), function(val) KV.Visual:UpdateWeaponColor(KV.Config:Get("weapon_r"), KV.Config:Get("weapon_g"), val) end)
-        y = y + 50
-        CreateSoftSlider(panel, "Размытие текстур", 20, y, 0, 1, KV.Config:Get("texture_blur", 0.5), function(val) KV.Visual:ApplyTextureBlur(val) end, 0.01)
-
-        return panel
-    end
-
-    function KV.Main:CreateAudioTab()
-        local panel = vgui.Create("DPanel")
-        panel:SetSize(720, 530)
-        panel.Paint = function(self, w, h) draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200)) end
-
-        local y = 15
-        local hitList = { "meow", "fart", "moan", "kiss" }
-        local hitNames = { "Мяу", "Пердёж", "Стон", "Поцелуй" }
-        for i, name in ipairs(hitNames) do
-            local btn = vgui.Create("DButton", panel)
-            btn:SetPos(20 + (i-1)*110, y)
-            btn:SetSize(100, 28)
-            btn:SetText(name)
-            btn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
-            btn.DoClick = function() KV.Config:Set("hit_sound", hitList[i]) KV.Audio:Play(KV.Audio.hitSounds[hitList[i]], 0.5) end
-        end
-        y = y + 45
-        CreateSoftSlider(panel, "Громкость попаданий", 20, y, 0, 1, KV.Config:Get("hit_vol", 0.5), function(val) KV.Config:Set("hit_vol", val) end, 0.01)
-        y = y + 45
-
-        local loadBtn = vgui.Create("DButton", panel)
-        loadBtn:SetPos(20, y)
-        loadBtn:SetSize(220, 30)
-        loadBtn:SetText("📁 Загрузить свой звук (MP3/WAV)")
-        loadBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
-        loadBtn.DoClick = function()
-            vgui.OpenFileDialog("Открыть звук", "*.mp3;*.wav", false, function(fullPath)
-                if fullPath then KV.Audio:LoadCustomSound(fullPath) end
-            end)
-        end
-        y = y + 45
-
-        local clickList = { "soft", "tap", "bubble", "whisper" }
-        local clickNames = { "Мягкий", "Тап", "Пузырёк", "Шёпот" }
-        for i, name in ipairs(clickNames) do
-            local btn = vgui.Create("DButton", panel)
-            btn:SetPos(20 + (i-1)*110, y)
-            btn:SetSize(100, 28)
-            btn:SetText(name)
-            btn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
-            btn.DoClick = function() KV.Config:Set("click_sound", clickList[i]) KV.Audio:PlayClick() end
-        end
-        y = y + 45
-        CreateSoftSlider(panel, "Громкость кликов", 20, y, 0, 1, KV.Config:Get("click_vol", 0.3), function(val) KV.Config:Set("click_vol", val) end, 0.01)
-
-        return panel
-    end
-
-    function KV.Main:CreateBindsTab()
-        local panel = vgui.Create("DPanel")
-        panel:SetSize(720, 530)
-        panel.Paint = function(self, w, h) draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200)) end
-
-        local listBox = vgui.Create("DListView", panel)
-        listBox:SetPos(20, 20)
-        listBox:SetSize(400, 320)
-        listBox:AddColumn("Клавиша")
-        listBox:AddColumn("Команда")
-        listBox:AddColumn("Активен")
-
-        local function refreshBinds()
-            listBox:Clear()
-            for key, cmd in pairs(KV.Binds.list) do
-                local active = KV.Binds.active[key] and "✅" or "❌"
-                listBox:AddLine(key, cmd, active)
-            end
-        end
-        refreshBinds()
-
-        local delBtn = vgui.Create("DButton", panel)
-        delBtn:SetPos(440, 20)
-        delBtn:SetSize(120, 28)
-        delBtn:SetText("Удалить")
-        delBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(60, 30, 40, 200)) end
-        delBtn.DoClick = function()
-            local line = listBox:GetSelectedLine()
-            if line then KV.Binds:Remove(line:GetValue(1)) refreshBinds() KV.Audio:PlayClick() end
-        end
-
-        local toggleBindBtn = vgui.Create("DButton", panel)
-        toggleBindBtn:SetPos(440, 55)
-        toggleBindBtn:SetSize(120, 28)
-        toggleBindBtn:SetText("Вкл/Выкл")
-        toggleBindBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 50, 60, 200)) end
-        toggleBindBtn.DoClick = function()
-            local line = listBox:GetSelectedLine()
-            if line then KV.Binds:Toggle(line:GetValue(1)) refreshBinds() KV.Audio:PlayClick() end
-        end
-
-        local keyEntry = vgui.Create("DTextEntry", panel)
-        keyEntry:SetPos(20, 360)
-        keyEntry:SetSize(120, 28)
-        keyEntry:SetPlaceholderText("Клавиша")
-        keyEntry:SetBackgroundColor(Color(40, 30, 55))
-
-        local cmdEntry = vgui.Create("DTextEntry", panel)
-        cmdEntry:SetPos(150, 360)
-        cmdEntry:SetSize(270, 28)
-        cmdEntry:SetPlaceholderText("Команда")
-        cmdEntry:SetBackgroundColor(Color(40, 30, 55))
-
-        local addBtn = vgui.Create("DButton", panel)
-        addBtn:SetPos(440, 360)
-        addBtn:SetSize(120, 28)
-        addBtn:SetText("➕ Добавить")
-        addBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 60, 40, 200)) end
-        addBtn.DoClick = function()
-            local key = keyEntry:GetValue()
-            local cmd = cmdEntry:GetValue()
-            if key ~= "" and cmd ~= "" then
-                KV.Binds:Add(key, cmd)
-                refreshBinds()
-                keyEntry:SetValue("")
-                cmdEntry:SetValue("")
-                KV.Audio:PlayClick()
-            end
-        end
-
-        local help = vgui.Create("DLabel", panel)
-        help:SetPos(20, 400)
-        help:SetText("Доступные клавиши: F1-F12, INSERT, DELETE, HOME, END, SPACE, TAB, ESC, ENTER, UP, DOWN, LEFT, RIGHT")
-        help:SetFont("DermaDefaultSmall")
-        help:SetTextColor(Color(150, 130, 170))
-        help:SizeToContents()
-
-        return panel
-    end
-
-    function KV.Main:CreateConfigTab()
-        local panel = vgui.Create("DPanel")
-        panel:SetSize(720, 530)
-        panel.Paint = function(self, w, h) draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200)) end
-
-        local y = 20
-
-        local profileLabel = vgui.Create("DLabel", panel)
-        profileLabel:SetPos(20, y)
-        profileLabel:SetText("Текущий профиль: " .. KV.Config.profile)
-        profileLabel:SetFont("DermaDefaultBold")
-        profileLabel:SetTextColor(Color(220, 200, 230))
-        profileLabel:SizeToContents()
-        y = y + 35
-
-        local nameEntry = vgui.Create("DTextEntry", panel)
-        nameEntry:SetPos(20, y)
-        nameEntry:SetSize(200, 28)
-        nameEntry:SetPlaceholderText("Имя нового профиля")
-        nameEntry:SetBackgroundColor(Color(40, 30, 55))
-        y = y + 40
-
-        local saveBtn = vgui.Create("DButton", panel)
-        saveBtn:SetPos(20, y)
-        saveBtn:SetSize(150, 30)
-        saveBtn:SetText("💾 Сохранить профиль")
-        saveBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 50, 70, 200)) end
-        saveBtn.DoClick = function()
-            local name = nameEntry:GetValue()
-            if name ~= "" then
-                KV.Config:Save()
-                KV.Config.profile = name
-                profileLabel:SetText("Текущий профиль: " .. name)
-                KV.Audio:PlayClick()
-            end
-        end
-        y = y + 45
-
-        local loadBtn = vgui.Create("DButton", panel)
-        loadBtn:SetPos(20, y)
-        loadBtn:SetSize(150, 30)
-        loadBtn:SetText("📂 Загрузить профиль")
-        loadBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 50, 70, 200)) end
-        loadBtn.DoClick = function()
-            local files = file.Find("kv_config_*.json", "DATA")
-            if #files == 0 then return end
-            local combo = vgui.Create("DComboBox", panel)
-            combo:SetPos(20, y + 40)
-            combo:SetSize(200, 28)
-            for _, f in ipairs(files) do
-                local name = string.match(f, "kv_config_(.+)%.json")
-                if name then combo:AddChoice(name) end
-            end
-            combo.OnSelect = function(_, _, value)
-                KV.Config.profile = value
-                KV.Config:Load()
-                profileLabel:SetText("Текущий профиль: " .. value)
-                KV.Audio:PlayClick()
-            end
-        end
-
-        local resetBtn = vgui.Create("DButton", panel)
-        resetBtn:SetPos(20, y + 80)
-        resetBtn:SetSize(150, 30)
-        resetBtn:SetText("🔄 Сбросить настройки")
-        resetBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(70, 40, 40, 200)) end
-        resetBtn.DoClick = function()
-            for k, v in pairs(KV.Config.defaults) do
-                KV.Config.data[k] = v
-            end
-            KV.Config:Save()
-            KV.Config:ApplyAll()
-            KV.Audio:PlayClick()
-        end
-
-        return panel
-    end
-
-    -- =====================================================
-    -- БЛОК 8: ЗАПУСК
-    -- =====================================================
-
-    hook.Add("KeyPress", "KV_OpenMenu", function(ply, key)
-        if key == KEY_INSERT then
-            if KV.Config:Get("window_minimized", false) then
-                KV.Main:RestoreFromMinimized()
-            elseif IsValid(windowFrame) then
-                windowFrame:Close()
-                windowFrame = nil
-            else
-                KV.Main:Open()
-                KV.Audio:PlayClick()
-            end
-        end
-    end)
-
-    timer.Simple(1, function()
-        LocalPlayer():ChatPrint("[KV] 🌸 KULTURNIY.VISUAL v8.0 загружен! Нажми INSERT для открытия окна. 💕")
-        KV.Config:ApplyAll()
-    end)
-
-    print("[KV] 🌸 KULTURNIY.VISUAL v8.0 — Оконный интерфейс")
-
-end
+
+        body {
+            background: radial-gradient(circle at 30% 40%, #1a0b1e, #0d0510);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            padding: 16px;
+            transition: background 0.3s ease;
+        }
+
+        /* ===== ОКНО ===== */
+        .window {
+            background: rgba(20, 15, 30, 0.94);
+            backdrop-filter: blur(16px);
+            border-radius: 24px;
+            border: 1px solid rgba(160, 80, 200, 0.25);
+            box-shadow: 0 0 60px rgba(160, 80, 200, 0.15);
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            transition: all 0.25s ease;
+        }
+
+        /* ===== ВЕРХНЯЯ ПАНЕЛЬ ===== */
+        .titlebar {
+            background: rgba(60, 30, 80, 0.6);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(160, 80, 200, 0.15);
+            flex-shrink: 0;
+            min-height: 48px;
+            cursor: grab;
+        }
+
+        .titlebar:active {
+            cursor: grabbing;
+        }
+
+        .titlebar-title {
+            color: #ffb3d9;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 0.3px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .titlebar-title span {
+            font-size: 16px;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .win-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.15s;
+            background: rgba(255, 255, 255, 0.05);
+            color: #ccc;
+        }
+
+        .win-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .win-btn.minimize { background: rgba(60, 50, 80, 0.5); }
+        .win-btn.minimize:hover { background: rgba(80, 60, 110, 0.6); }
+        .win-btn.maximize { background: rgba(50, 70, 90, 0.5); }
+        .win-btn.maximize:hover { background: rgba(70, 100, 130, 0.6); }
+        .win-btn.close { background: rgba(100, 30, 40, 0.5); }
+        .win-btn.close:hover { background: rgba(160, 40, 50, 0.7); color: #fff; }
+
+        /* ===== ВКЛАДКИ ===== */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 10px 14px 0 14px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 12px 12px 0 0;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            background: rgba(255, 255, 255, 0.04);
+            color: #9888aa;
+            flex: 1 0 auto;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .tab-btn.active {
+            background: rgba(100, 50, 140, 0.35);
+            color: #ffbbdd;
+            box-shadow: 0 -2px 12px rgba(160, 80, 200, 0.1);
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        /* ===== КОНТЕНТ ===== */
+        .tab-content {
+            padding: 16px 18px 20px 18px;
+            overflow-y: auto;
+            flex: 1;
+            max-height: 55vh;
+        }
+
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== ПОЛЗУНКИ ===== */
+        .slider-group {
+            margin-bottom: 16px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #d0bcd8;
+            margin-bottom: 4px;
+        }
+
+        .slider-label span:last-child {
+            color: #c8a8d8;
+            font-weight: 600;
+            min-width: 36px;
+            text-align: right;
+        }
+
+        .slider-track {
+            position: relative;
+            height: 8px;
+            background: rgba(60, 50, 80, 0.5);
+            border-radius: 20px;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .slider-fill {
+            height: 100%;
+            border-radius: 20px;
+            background: linear-gradient(90deg, #a060d0, #d080f0);
+            width: 50%;
+            transition: width 0.05s ease;
+            position: relative;
+        }
+
+        .slider-knob {
+            position: absolute;
+            top: 50%;
+            right: -10px;
+            transform: translate(0, -50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #e8b0ff, #c070e8);
+            box-shadow: 0 0 20px rgba(180, 100, 220, 0.4);
+            border: 2px solid rgba(255, 200, 255, 0.3);
+            transition: 0.08s;
+        }
+
+        .slider-track:active .slider-knob {
+            transform: translate(0, -50%) scale(1.12);
+            box-shadow: 0 0 30px rgba(200, 120, 255, 0.6);
+        }
+
+        /* ===== КНОПКИ ===== */
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 6px 0 4px 0;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.15s;
+            background: rgba(60, 40, 80, 0.5);
+            color: #d0bcd8;
+            flex: 1 0 auto;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background: rgba(80, 50, 110, 0.6);
+            transform: scale(1.02);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn.active-btn {
+            background: rgba(120, 60, 170, 0.4);
+            color: #ffbbdd;
+            box-shadow: 0 0 20px rgba(160, 80, 200, 0.15);
+        }
+
+        .btn.primary {
+            background: rgba(80, 40, 120, 0.6);
+            color: #f0d8f8;
+        }
+
+        .btn.danger {
+            background: rgba(120, 30, 40, 0.5);
+            color: #ffb0b0;
+        }
+
+        .btn.success {
+            background: rgba(40, 80, 60, 0.5);
+            color: #b0e0b0;
+        }
+
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 11px;
+            min-width: 40px;
+        }
+
+        /* ===== НИЖНЯЯ ПАНЕЛЬ ===== */
+        .footer {
+            padding: 12px 18px 16px 18px;
+            border-top: 1px solid rgba(160, 80, 200, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .toggle-btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            background: rgba(80, 40, 110, 0.5);
+            color: #d0bcd8;
+        }
+
+        .toggle-btn.on {
+            background: rgba(60, 120, 80, 0.4);
+            color: #88ddbb;
+            box-shadow: 0 0 20px rgba(80, 200, 150, 0.08);
+        }
+
+        .toggle-btn.off {
+            background: rgba(100, 40, 50, 0.4);
+            color: #dd9999;
+        }
+
+        .status-badge {
+            font-size: 12px;
+            color: #8877aa;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 4px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(160, 80, 200, 0.08);
+        }
+
+        /* ===== СВЕРНУТАЯ ПОЛОСКА ===== */
+        .minibar {
+            display: none;
+            background: rgba(35, 25, 50, 0.92);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 10px 18px;
+            border: 1px solid rgba(160, 80, 200, 0.15);
+            box-shadow: 0 0 30px rgba(160, 80, 200, 0.08);
+            width: fit-content;
+            max-width: 280px;
+            align-items: center;
+            gap: 14px;
+            margin: 0 auto;
+            cursor: grab;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999;
+        }
+
+        .minibar.show {
+            display: flex;
+        }
+
+        .minibar:active {
+            cursor: grabbing;
+        }
+
+        .minibar-title {
+            color: #ffb3d9;
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .minibar-restore {
+            background: rgba(80, 50, 110, 0.5);
+            border: none;
+            border-radius: 10px;
+            width: 28px;
+            height: 28px;
+            color: #ccc;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+
+        .minibar-restore:hover {
+            background: rgba(120, 60, 170, 0.5);
+        }
+
+        /* ===== БИНДЫ ===== */
+        .bind-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            font-size: 13px;
+            color: #8877aa;
+            margin-bottom: 4px;
+        }
+
+        .bind-item .bind-key {
+            font-weight: 600;
+            color: #bb99cc;
+            min-width: 50px;
+        }
+
+        .bind-item .bind-cmd {
+            color: #aabbcc;
+            flex: 1;
+            margin: 0 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .bind-item .bind-status {
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .bind-item .bind-status.active { color: #66dd88; }
+        .bind-item .bind-status.inactive { color: #dd6666; }
+
+        /* ===== ПОЛЯ ВВОДА ===== */
+        .input-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .input-group input {
+            flex: 1;
+            min-width: 80px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(160, 80, 200, 0.2);
+            background: rgba(40, 30, 55, 0.6);
+            color: #ddd;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .input-group input:focus {
+            border-color: rgba(160, 80, 200, 0.5);
+            box-shadow: 0 0 20px rgba(160, 80, 200, 0.05);
+        }
+
+        /* ===== АДАПТИВ ===== */
+        @media (max-width: 420px) {
+            .window { max-width: 100%; border-radius: 18px; }
+            .titlebar { padding: 8px 12px; min-height: 42px; }
+            .titlebar-title { font-size: 13px; }
+            .win-btn { width: 26px; height: 26px; font-size: 13px; }
+            .tab-btn { font-size: 11px; padding: 6px 10px; min-width: 50px; }
+            .tab-content { padding: 12px 12px 16px 12px; }
+            .slider-label { font-size: 12px; }
+            .btn { font-size: 11px; padding: 6px 12px; }
+            .footer { padding: 10px 14px 12px 14px; }
+            .toggle-btn { font-size: 12px; padding: 6px 14px; }
+            .minibar { max-width: 220px; padding: 8px 14px; }
+            .minibar-title { font-size: 12px; }
+        }
+
+        @media (max-width: 360px) {
+            .tabs { gap: 2px; padding: 8px 8px 0 8px; }
+            .tab-btn { font-size: 10px; padding: 5px 6px; min-width: 40px; }
+        }
+
+        /* ===== СКРОЛЛ ===== */
+        .tab-content::-webkit-scrollbar {
+            width: 4px;
+        }
+        .tab-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .tab-content::-webkit-scrollbar-thumb {
+            background: rgba(160, 80, 200, 0.3);
+            border-radius: 10px;
+        }
+
+        #bindList {
+            max-height: 160px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        #bindList::-webkit-scrollbar {
+            width: 3px;
+        }
+        #bindList::-webkit-scrollbar-thumb {
+            background: rgba(160, 80, 200, 0.2);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===================================================== -->
+    <!-- ОКНО -->
+    <!-- ===================================================== -->
+    <div class="window" id="appWindow">
+
+        <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+        <div class="titlebar" id="titlebar">
+            <div class="titlebar-title">
+                <span>🌸</span> KULTURNIY.VISUAL v8.0
+            </div>
+            <div class="window-controls">
+                <button class="win-btn minimize" id="minimizeBtn" title="Свернуть">—</button>
+                <button class="win-btn maximize" id="maximizeBtn" title="Развернуть">⬛</button>
+                <button class="win-btn close" id="closeBtn" title="Закрыть">✕</button>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКИ -->
+        <div class="tabs" id="tabs">
+            <button class="tab-btn active" data-tab="visual">🎨 Визуалы</button>
+            <button class="tab-btn" data-tab="audio">🔊 Звуки</button>
+            <button class="tab-btn" data-tab="binds">⌨️ Бинды</button>
+            <button class="tab-btn" data-tab="config">💾 Конфиги</button>
+        </div>
+
+        <!-- КОНТЕНТ -->
+        <div class="tab-content" id="tabContent">
+
+            <!-- ===== ВИЗУАЛЫ ===== -->
+            <div class="tab-pane active" id="pane-visual">
+                <div class="slider-group">
+                    <div class="slider-label"><span>FOV</span><span id="val-fov">90</span></div>
+                    <div class="slider-track" data-slider="fov" data-min="60" data-max="120" data-value="90">
+                        <div class="slider-fill" style="width:50%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label"><span>Небо R</span><span id="val-sky_r">100</span></div>
+                    <div class="slider-track" data-slider="sky_r" data-min="0" data-max="255" data-value="100">
+                        <div class="slider-fill" style="width:39%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label"><span>Небо G</span><span id="val-sky_g">150</span></div>
+                    <div class="slider-track" data-slider="sky_g" data-min="0" data-max="255" data-value="150">
+                        <div class="slider-fill" style="width:59%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label"><span>Небо B</span><span id="val-sky_b">200</span></div>
+                    <div class="slider-track" data-slider="sky_b" data-min="0" data-max="255" data-value="200">
+                        <div class="slider-fill" style="width:78%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label"><span>Длина рук</span><span id="val-arms">1.00</span></div>
+                    <div class="slider-track" data-slider="arms" data-min="0.5" data-max="2.0" data-value="1.0" data-step="0.01">
+                        <div class="slider-fill" style="width:33%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label"><span>Размытие текстур</span><span id="val-blur">0.50</span></div>
+                    <div class="slider-track" data-slider="blur" data-min="0" data-max="1" data-value="0.5" data-step="0.01">
+                        <div class="slider-fill" style="width:50%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+
+                <div style="margin-top:6px;">
+                    <div class="slider-label" style="margin-bottom:6px;"><span>Прицел</span></div>
+                    <div class="btn-group">
+                        <button class="btn active-btn" data-crosshair="dot">Точка</button>
+                        <button class="btn" data-crosshair="cross">Крест</button>
+                        <button class="btn" data-crosshair="circle">Круг</button>
+                        <button class="btn" data-crosshair="check">Чека</button>
+                        <button class="btn" data-crosshair="star">Звезда</button>
+                    </div>
+                </div>
+
+                <div style="margin-top:6px;">
+                    <div class="slider-label" style="margin-bottom:6px;"><span>Цвет оружия</span></div>
+                    <div class="slider-group">
+                        <div class="slider-label"><span>R</span><span id="val-w_r">255</span></div>
+                        <div class="slider-track" data-slider="w_r" data-min="0" data-max="255" data-value="255">
+                            <div class="slider-fill" style="width:100%"><div class="slider-knob"></div></div>
+                        </div>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-label"><span>G</span><span id="val-w_g">100</span></div>
+                        <div class="slider-track" data-slider="w_g" data-min="0" data-max="255" data-value="100">
+                            <div class="slider-fill" style="width:39%"><div class="slider-knob"></div></div>
+                        </div>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-label"><span>B</span><span id="val-w_b">200</span></div>
+                        <div class="slider-track" data-slider="w_b" data-min="0" data-max="255" data-value="200">
+                            <div class="slider-fill" style="width:78%"><div class="slider-knob"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== ЗВУКИ ===== -->
+            <div class="tab-pane" id="pane-audio">
+                <div style="margin-bottom:12px;">
+                    <div class="slider-label" style="margin-bottom:6px;"><span>Хит-звуки</span></div>
+                    <div class="btn-group">
+                        <button class="btn active-btn" data-hit="meow">Мяу</button>
+                        <button class="btn" data-hit="fart">Пердёж</button>
+                        <button class="btn" data-hit="moan">Стон</button>
+                        <button class="btn" data-hit="kiss">Поцелуй</button>
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label"><span>Громкость попаданий</span><span id="val-hitvol">0.50</span></div>
+                    <div class="slider-track" data-slider="hitvol" data-min="0" data-max="1" data-value="0.5" data-step="0.01">
+                        <div class="slider-fill" style="width:50%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <button class="btn primary" id="loadSoundBtn" style="width:100%;">📁 Загрузить свой звук (MP3/WAV)</button>
+                    <div style="font-size:11px; color:#776688; margin-top:4px; text-align:center;">(в демо — только имитация)</div>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <div class="slider-label" style="margin-bottom:6px;"><span>Звуки кликов</span></div>
+                    <div class="btn-group">
+                        <button class="btn active-btn" data-click="soft">Мягкий</button>
+                        <button class="btn" data-click="tap">Тап</button>
+                        <button class="btn" data-click="bubble">Пузырёк</button>
+                        <button class="btn" data-click="whisper">Шёпот</button>
+                    </div>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-label"><span>Громкость кликов</span><span id="val-clickvol">0.30</span></div>
+                    <div class="slider-track" data-slider="clickvol" data-min="0" data-max="1" data-value="0.3" data-step="0.01">
+                        <div class="slider-fill" style="width:30%"><div class="slider-knob"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== БИНДЫ ===== -->
+            <div class="tab-pane" id="pane-binds">
+                <div style="margin-bottom:12px;">
+                    <div class="input-group">
+                        <input type="text" id="bindKey" placeholder="Клавиша (F3)">
+                        <input type="text" id="bindCmd" placeholder="Команда (say hello)">
+                        <button class="btn success" id="addBindBtn" style="flex:0 0 auto;">➕</button>
+                    </div>
+                </div>
+
+                <div id="bindList">
+                    <div class="bind-item">
+                        <span class="bind-key">F3</span>
+                        <span class="bind-cmd">say hello</span>
+                        <span class="bind-status active">✅</span>
+                        <button class="btn btn-sm" onclick="this.parentElement.remove(); playClick();">🗑️</button>
+                    </div>
+                    <div class="bind-item">
+                        <span class="bind-key">F4</span>
+                        <span class="bind-cmd">say test</span>
+                        <span class="bind-status inactive">❌</span>
+                        <button class="btn btn-sm" onclick="this.parentElement.remove(); playClick();">🗑️</button>
+                    </div>
+                </div>
+
+                <div style="font-size:11px; color:#776688; margin-top:10px;">
+                    Доступные клавиши: F1-F12, INSERT, DELETE, HOME, END, SPACE, TAB, ESC, ENTER, UP, DOWN, LEFT, RIGHT
+                </div>
+            </div>
+
+            <!-- ===== КОНФИГИ ===== -->
+            <div class="tab-pane" id="pane-config">
+                <div style="margin-bottom:12px;">
+                    <div style="color:#d0bcd8; font-weight:600; font-size:14px; margin-bottom:4px;">
+                        Текущий профиль: <span id="profileName" style="color:#ffbbdd;">default</span>
+                    </div>
+                </div>
+
+                <div class="input-group" style="margin-bottom:12px;">
+                    <input type="text" id="profileInput" placeholder="Имя нового профиля">
+                    <button class="btn primary" id="saveProfileBtn" style="flex:0 0 auto;">💾</button>
+                    <button class="btn" id="loadProfileBtn" style="flex:0 0 auto;">📂</button>
+                </div>
+
+                <button class="btn danger" id="resetBtn" style="width:100%;">🔄 Сбросить настройки</button>
+            </div>
+
+        </div>
+
+        <!-- НИЖНЯЯ ПАНЕЛЬ -->
+        <div class="footer">
+            <button class="toggle-btn on" id="toggleBtn">✅ Включено</button>
+            <span class="status-badge">🛡️ Пассивная защита</span>
+        </div>
+
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- СВЕРНУТАЯ ПОЛОСКА -->
+    <!-- ===================================================== -->
+    <div class="minibar" id="minibar">
+        <span class="minibar-title">🌸 KULTURNIY.VISUAL</span>
+        <button class="minibar-restore" id="restoreFromMinibar">⬛</button>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- СКРИПТ -->
+    <!-- ===================================================== -->
+    <script>
+        // ============================================================
+        //  ПОЛНОСТЬЮ РАБОЧЕЕ ДЕМО ДЛЯ GITHUB PAGES
+        //  КОПИРУЙ И ВСТАВЛЯЙ — ВСЁ РАБОТАЕТ
+        // ============================================================
+
+        // ----- СОСТОЯНИЕ -----
+        const state = {
+            minimized: false,
+            maximized: false,
+            enabled: true,
+            fov: 90,
+            sky_r: 100,
+            sky_g: 150,
+            sky_b: 200,
+            arms: 1.0,
+            blur: 0.5,
+            crosshair: 'dot',
+            w_r: 255,
+            w_g: 100,
+            w_b: 200,
+            hit: 'meow',
+            hitvol: 0.5,
+            click: 'soft',
+            clickvol: 0.3,
+            profile: 'default'
+        };
+
+        // ----- ЭЛЕМЕНТЫ -----
+        const win = document.getElementById('appWindow');
+        const minibar = document.getElementById('minibar');
+        const minimizeBtn = document.getElementById('minimizeBtn');
+        const maximizeBtn = document.getElementById('maximizeBtn');
+        const closeBtn = document.getElementById('closeBtn');
+        const restoreBtn = document.getElementById('restoreFromMinibar');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const tabs = document.querySelectorAll('.tab-btn');
+        const panes = {
+            visual: document.getElementById('pane-visual'),
+            audio: document.getElementById('pane-audio'),
+            binds: document.getElementById('pane-binds'),
+            config: document.getElementById('pane-config'),
+        };
+
+        // ----- ЗВУК КЛИКА -----
+        function playClick() {
+            try {
+                const ctx = new(window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 600 + Math.random() * 100;
+                osc.type = 'sine';
+                gain.gain.value = 0.03;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.05);
+            } catch (_) { /* тихо */ }
+        }
+
+        // ----- ИНИЦИАЛИЗАЦИЯ ПОЛЗУНКОВ -----
+        function updateSliderDisplay(track) {
+            const fill = track.querySelector('.slider-fill');
+            const min = parseFloat(track.dataset.min);
+            const max = parseFloat(track.dataset.max);
+            const val = parseFloat(track.dataset.value);
+            const percent = ((val - min) / (max - min)) * 100;
+            fill.style.width = Math.min(100, Math.max(0, percent)) + '%';
+        }
+
+        document.querySelectorAll('.slider-track').forEach(track => {
+            const min = parseFloat(track.dataset.min);
+            const max = parseFloat(track.dataset.max);
+            const step = parseFloat(track.dataset.step) || 1;
+            let val = parseFloat(track.dataset.value);
+
+            updateSliderDisplay(track);
+
+            function setValue(clientX) {
+                const rect = track.getBoundingClientRect();
+                let x = (clientX - rect.left) / rect.width;
+                x = Math.min(1, Math.max(0, x));
+                let newVal = min + x * (max - min);
+                newVal = Math.round(newVal / step) * step;
+                newVal = Math.min(max, Math.max(min, newVal));
+                track.dataset.value = newVal;
+
+                const pct = ((newVal - min) / (max - min)) * 100;
+                const fill = track.querySelector('.slider-fill');
+                fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+
+                const id = track.dataset.slider;
+                const label = document.getElementById('val-' + id);
+                if (label) {
+                    label.textContent = step < 1 ? newVal.toFixed(2) : Math.round(newVal);
+                }
+
+                if (id === 'fov') state.fov = newVal;
+                else if (id === 'sky_r') state.sky_r = newVal;
+                else if (id === 'sky_g') state.sky_g = newVal;
+                else if (id === 'sky_b') state.sky_b = newVal;
+                else if (id === 'arms') state.arms = newVal;
+                else if (id === 'blur') state.blur = newVal;
+                else if (id === 'w_r') state.w_r = newVal;
+                else if (id === 'w_g') state.w_g = newVal;
+                else if (id === 'w_b') state.w_b = newVal;
+                else if (id === 'hitvol') state.hitvol = newVal;
+                else if (id === 'clickvol') state.clickvol = newVal;
+
+                playClick();
+                updateSkyPreview();
+            }
+
+            track.addEventListener('mousedown', (e) => {
+                setValue(e.clientX);
+                const onMove = (ev) => setValue(ev.clientX);
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                e.preventDefault();
+            });
+
+            track.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                if (!touch) return;
+                setValue(touch.clientX);
+                const onMove = (ev) => {
+                    const t = ev.touches[0];
+                    if (t) setValue(t.clientX);
+                };
+                const onEnd = () => {
+                    document.removeEventListener('touchmove', onMove);
+                    document.removeEventListener('touchend', onEnd);
+                };
+                document.addEventListener('touchmove', onMove, { passive: true });
+                document.addEventListener('touchend', onEnd, { passive: true });
+                e.preventDefault();
+            }, { passive: false });
+        });
+
+        // ----- ПРЕДПРОСМОТР НЕБА -----
+        function updateSkyPreview() {
+            const r = state.sky_r;
+            const g = state.sky_g;
+            const b = state.sky_b;
+            document.body.style.background =
+                `radial-gradient(circle at 30% 40%, rgb(${Math.min(255,r+20)},${Math.min(255,g+10)},${Math.min(255,b+30)}), rgb(${Math.round(r/2)},${Math.round(g/2)},${Math.round(b/2)}))`;
+        }
+        updateSkyPreview();
+
+        // ----- ВКЛАДКИ -----
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabs.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const target = btn.dataset.tab;
+                Object.keys(panes).forEach(key => {
+                    panes[key].classList.toggle('active', key === target);
+                });
+                playClick();
+            });
+        });
+
+        // ----- ПРИЦЕЛЫ -----
+        document.querySelectorAll('[data-crosshair]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-crosshair]').forEach(b => b.classList.remove('active-btn'));
+                btn.classList.add('active-btn');
+                state.crosshair = btn.dataset.crosshair;
+                playClick();
+            });
+        });
+
+        // ----- ХИТ-ЗВУКИ -----
+        document.querySelectorAll('[data-hit]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-hit]').forEach(b => b.classList.remove('active-btn'));
+                btn.classList.add('active-btn');
+                state.hit = btn.dataset.hit;
+                playClick();
+                try {
+                    const ctx = new(window.AudioContext || window.webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = state.hit === 'meow' ? 800 : state.hit === 'fart' ? 120 : state.hit === 'moan' ?
+                        300 : 600;
+                    osc.type = state.hit === 'fart' ? 'sawtooth' : 'sine';
+                    gain.gain.value = state.hitvol * 0.15;
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.2);
+                } catch (_) {}
+            });
+        });
+
+        // ----- КЛИКИ -----
+        document.querySelectorAll('[data-click]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-click]').forEach(b => b.classList.remove('active-btn'));
+                btn.classList.add('active-btn');
+                state.click = btn.dataset.click;
+                playClick();
+            });
+        });
+
+        // ----- ТОГГЛ -----
+        toggleBtn.addEventListener('click', () => {
+            state.enabled = !state.enabled;
+            toggleBtn.textContent = state.enabled ? '✅ Включено' : '❌ Выключено';
+            toggleBtn.className = 'toggle-btn ' + (state.enabled ? 'on' : 'off');
+            playClick();
+        });
+
+        // ----- СВЕРНУТЬ -----
+        minimizeBtn.addEventListener('click', () => {
+            state.minimized = true;
+            win.style.display = 'none';
+            minibar.classList.add('show');
+            playClick();
+        });
+
+        // ----- РАЗВЕРНУТЬ -----
+        maximizeBtn.addEventListener('click', () => {
+            state.maximized = !state.maximized;
+            if (state.maximized) {
+                win.style.maxWidth = '100%';
+                win.style.borderRadius = '0';
+                win.style.maxHeight = '100vh';
+            } else {
+                win.style.maxWidth = '480px';
+                win.style.borderRadius = '24px';
+                win.style.maxHeight = '90vh';
+            }
+            playClick();
+        });
+
+        // ----- ЗАКРЫТЬ -----
+        closeBtn.addEventListener('click', () => {
+            state.enabled = false;
+            toggleBtn.textContent = '❌ Выключено';
+            toggleBtn.className = 'toggle-btn off';
+            win.style.opacity = '0.4';
+            setTimeout(() => { win.style.opacity = '1'; }, 400);
+            playClick();
+        });
+
+        // ----- ВОССТАНОВИТЬ ИЗ СВЕРНУТОГО -----
+        restoreBtn.addEventListener('click', () => {
+            state.minimized = false;
+            win.style.display = 'flex';
+            minibar.classList.remove('show');
+            playClick();
+        });
+
+        // ----- БИНДЫ -----
+        document.getElementById('addBindBtn').addEventListener('click', () => {
+            const key = document.getElementById('bindKey').value.trim();
+            const cmd = document.getElementById('bindCmd').value.trim();
+            if (key && cmd) {
+                const list = document.getElementById('bindList');
+                const div = document.createElement('div');
+                div.className = 'bind-item';
+                div.innerHTML = `
+                    <span class="bind-key">${key}</span>
+                    <span class="bind-cmd">${cmd}</span>
+                    <span class="bind-status active">✅</span>
+                    <button class="btn btn-sm" onclick="this.parentElement.remove(); playClick();">🗑️</button>
+                `;
+                list.prepend(div);
+                document.getElementById('bindKey').value = '';
+                document.getElementById('bindCmd').value = '';
+                playClick();
+            }
+        });
+
+        // ----- ПРОФИЛИ -----
+        document.getElementById('saveProfileBtn').addEventListener('click', () => {
+            const name = document.getElementById('profileInput').value.trim();
+            if (name) {
+                state.profile = name;
+                document.getElementById('profileName').textContent = name;
+                document.getElementById('profileInput').value = '';
+                playClick();
+            }
+        });
+
+        document.getElementById('loadProfileBtn').addEventListener('click', () => {
+            const names = ['default', 'fps', 'cinema', 'kawaii', 'retro'];
+            const rand = names[Math.floor(Math.random() * names.length)];
+            state.profile = rand;
+            document.getElementById('profileName').textContent = rand;
+            playClick();
+        });
+
+        // ----- СБРОС -----
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (confirm('Сбросить все настройки?')) {
+                const defaults = {
+                    fov: 90,
+                    sky_r: 100,
+                    sky_g: 150,
+                    sky_b: 200,
+                    arms: 1.0,
+                    blur: 0.5,
+                    w_r: 255,
+                    w_g: 100,
+                    w_b: 200,
+                    hitvol: 0.5,
+                    clickvol: 0.3
+                };
+                Object.keys(defaults).forEach(id => {
+                    const track = document.querySelector(`.slider-track[data-slider="${id}"]`);
+                    if (track) {
+                        track.dataset.value = defaults[id];
+                        updateSliderDisplay(track);
+                        const label = document.getElementById('val-' + id);
+                        if (label) label.textContent = defaults[id];
+                        state[id] = defaults[id];
+                    }
+                });
+                document.querySelectorAll('[data-crosshair]').forEach(b => b.classList.remove('active-btn'));
+                document.querySelector('[data-crosshair="dot"]').classList.add('active-btn');
+                state.crosshair = 'dot';
+                document.querySelectorAll('[data-hit]').forEach(b => b.classList.remove('active-btn'));
+                document.querySelector('[data-hit="meow"]').classList.add('active-btn');
+                state.hit = 'meow';
+                document.querySelectorAll('[data-click]').forEach(b => b.classList.remove('active-btn'));
+                document.querySelector('[data-click="soft"]').classList.add('active-btn');
+                state.click = 'soft';
+                state.profile = 'default';
+                document.getElementById('profileName').textContent = 'default';
+                updateSkyPreview();
+                playClick();
+            }
+        });
+
+        // ----- ПЕРЕМЕЩЕНИЕ ОКНА -----
+        let dragData = null;
+        const titlebar = document.getElementById('titlebar');
+
+        titlebar.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.win-btn')) return;
+            const rect = win.getBoundingClientRect();
+            dragData = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+            const onMove = (ev) => {
+                if (!dragData) return;
+                let x = ev.clientX - dragData.dx;
+                let y = ev.clientY - dragData.dy;
+                x = Math.max(0, Math.min(window.innerWidth - win.offsetWidth, x));
+                y = Math.max(0, Math.min(window.innerHeight - win.offsetHeight, y));
+                win.style.position = 'fixed';
+                win.style.left = x + 'px';
+                win.style.top = y + 'px';
+                win.style.margin = '0';
+            };
+            const onUp = () => { dragData = null;
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp); };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            e.preventDefault();
+        });
+
+        // ----- ПЕРЕМЕЩЕНИЕ СВЕРНУТОЙ ПОЛОСКИ -----
+        let miniDrag = null;
+        minibar.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.minibar-restore')) return;
+            const rect = minibar.getBoundingClientRect();
+            miniDrag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+            const onMove = (ev) => {
+                if (!miniDrag) return;
+                let x = ev.clientX - miniDrag.dx;
+                let y = ev.clientY - miniDrag.dy;
+                x = Math.max(0, Math.min(window.innerWidth - minibar.offsetWidth, x));
+                y = Math.max(0, Math.min(window.innerHeight - minibar.offsetHeight, y));
+                minibar.style.left = x + 'px';
+                minibar.style.top = y + 'px';
+                minibar.style.transform = 'none';
+            };
+            const onUp = () => { miniDrag = null;
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp); };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            e.preventDefault();
+        });
+
+        // ----- ЗАГРУЗКА ЗВУКА (имитация) -----
+        document.getElementById('loadSoundBtn').addEventListener('click', () => {
+            alert('📁 В демо-версии загрузка звука имитируется.\nВ реальном GMod скрипте это работает через vgui.OpenFileDialog.');
+            playClick();
+        });
+
+        // ----- СТАРТ -----
+        console.log('🌸 KULTURNIY.VISUAL v8.0 — Демо для GitHub Pages');
+        console.log('📱 Работает на телефонах, планшетах и ПК');
+        console.log('💾 Просто скопируй index.html и залей на GitHub');
+    </script>
+</body>
+</html>
