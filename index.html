@@ -1,289 +1,1070 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>вопрос</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            user-select: none;
-        }
-        body {
-            background: radial-gradient(circle at 30% 40%, #1a0b1e, #0d0510);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Segoe UI', 'Arial', system-ui, sans-serif;
-            padding: 20px;
-        }
-        .card {
-            background: rgba(25, 10, 30, 0.75);
-            backdrop-filter: blur(12px);
-            border: 2px solid #ff66aa;
-            border-radius: 48px;
-            padding: 50px 60px 40px;
-            box-shadow: 0 0 70px rgba(255, 80, 180, 0.5), inset 0 0 40px rgba(255, 100, 200, 0.2);
-            text-align: center;
-            max-width: 900px;
-            transition: 0.2s;
-            position: relative;
-        }
-        .card:hover {
-            box-shadow: 0 0 120px rgba(255, 80, 220, 0.8), inset 0 0 60px rgba(255, 120, 220, 0.3);
-        }
-        h1 {
-            font-size: clamp(2.8rem, 12vw, 5.6rem);
-            font-weight: 800;
-            letter-spacing: 2px;
-            background: linear-gradient(145deg, #ffb3d9, #ff66b2, #ff3388);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            text-shadow: 0 0 40px rgba(255, 50, 150, 0.6), 0 0 100px rgba(255, 20, 120, 0.3);
-            line-height: 1.3;
-            margin-bottom: 10px;
-        }
-        .emoji-big {
-            font-size: clamp(3rem, 10vw, 5rem);
-            display: block;
-            margin: 10px 0 25px;
-            filter: drop-shadow(0 0 30px #ff66aa);
-            animation: pulse 1.8s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.9; }
-            50% { transform: scale(1.08); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.9; }
-        }
-        .buttons {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            flex-wrap: wrap;
-            margin-top: 15px;
-            position: relative;
-            min-height: 80px;
-        }
-        .btn {
-            padding: 16px 48px;
-            font-size: 2rem;
-            font-weight: 700;
-            border: none;
-            border-radius: 60px;
-            cursor: pointer;
-            transition: 0.15s;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            position: relative;
-            min-width: 140px;
-        }
-        .btn-yes {
-            background: linear-gradient(145deg, #ff88cc, #ff44aa);
-            color: #1a0b1e;
-            box-shadow: 0 0 30px #ff44aa88;
-        }
-        .btn-yes:hover {
-            transform: scale(1.08);
-            box-shadow: 0 0 60px #ff44aaff;
-        }
-        .btn-no {
-            background: linear-gradient(145deg, #555, #222);
-            color: #bbb;
-            box-shadow: 0 0 10px #222;
-            transition: all 0.08s ease;
-            cursor: default;
-            pointer-events: auto; /* мы управляем через JS */
-        }
-        .btn-no:active {
-            pointer-events: none; /* страховка */
-        }
-        /* класс для "ускользания" */
-        .btn-no.escape {
-            position: fixed !important;
-            transition: all 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
-            z-index: 9999;
-            transform: scale(0.6);
-            opacity: 0.7;
-            pointer-events: none;
-            cursor: not-allowed;
-            box-shadow: 0 0 5px #ff000066;
-        }
-        .btn-no.shrink {
-            transform: scale(0.3) rotate(10deg);
-            opacity: 0.2;
-            pointer-events: none;
-            cursor: not-allowed;
-            min-width: 40px;
-            padding: 8px 20px;
-            font-size: 1rem;
-        }
-        .sub {
-            margin-top: 30px;
-            font-size: 1.2rem;
-            color: #cc99bb;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            border-top: 1px solid #ff66aa55;
-            padding-top: 25px;
-            font-weight: 300;
-        }
-        .sub span {
-            color: #ff88cc;
-            font-weight: 600;
-        }
-        #response-area {
-            margin-top: 20px;
-            font-size: 1.8rem;
-            color: #ffbbdd;
-            min-height: 3.5rem;
-            text-shadow: 0 0 20px #ff44aa88;
-        }
-        @media (max-width: 480px) {
-            .card { padding: 30px 20px; border-radius: 32px; }
-            .btn { padding: 12px 28px; font-size: 1.5rem; min-width: 100px; }
-            .buttons { gap: 20px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h1>отсосешь мне завтра, милый? :3</h1>
-        <span class="emoji-big">💕👉👈💕</span>
+-- =====================================================
+-- KULTURNIY.VISUAL v8.0 — ОКОННЫЙ ИНТЕРФЕЙС
+-- Закрыть, свернуть, развернуть, перемещение
+-- Мягкие ползунки, пассивная защита
+-- Для Garry's Mod
+-- =====================================================
 
-        <div class="buttons" id="buttonContainer">
-            <button class="btn btn-yes" id="btnYes">Да 💖</button>
-            <button class="btn btn-no" id="btnNo">Нет 💔</button>
-        </div>
+if CLIENT then
 
-        <div id="response-area"></div>
-        <div class="sub"><span>★</span> выбери вариант <span>★</span></div>
-    </div>
+    -- =====================================================
+    -- БЛОК 0: ПАССИВНАЯ ЗАЩИТА
+    -- =====================================================
+    KV = KV or {}
+    KV.AntiDetect = {}
 
-    <script>
-        (function() {
-            const btnYes = document.getElementById('btnYes');
-            const btnNo = document.getElementById('btnNo');
-            const response = document.getElementById('response-area');
-            const container = document.getElementById('buttonContainer');
+    local orig_GetPos = Entity.GetPos
+    local orig_GetVelocity = Entity.GetVelocity
+    local orig_RunConsoleCommand = RunConsoleCommand
+    local orig_hook_Add = hook.Add
+    local orig_hook_Remove = hook.Remove
+    local orig_PrintMessage = PrintMessage
 
-            // ---- Кнопка "Нет" никогда не даёт нажать ----
-            function makeNoUnclickable() {
-                // 1. Отключаем все стандартные события
-                btnNo.onclick = null;
-                btnNo.onmousedown = null;
-                btnNo.onmouseup = null;
-                btnNo.onpointerdown = null;
-                btnNo.onpointerup = null;
-                btnNo.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return false;
-                }, true);
-                // 2. Блокируем через CSS-свойства
-                btnNo.style.pointerEvents = 'none'; // основной метод
-                // 3. Дополнительно делаем невидимым для кликов через стек
-                btnNo.style.cursor = 'not-allowed';
-                // 4. Постоянно меняем позицию если вдруг стали доступны
-                setInterval(() => {
-                    // если по какой-то причине pointerEvents сбросился — восстанавливаем
-                    if (btnNo.style.pointerEvents !== 'none') {
-                        btnNo.style.pointerEvents = 'none';
-                    }
-                    // мелкое дрожание для усиления эффекта (опционально)
-                    const x = (Math.random() - 0.5) * 6;
-                    const y = (Math.random() - 0.5) * 6;
-                    btnNo.style.transform = `translate(${x}px, ${y}px) scale(0.95)`;
-                }, 100);
-            }
+    local realPos = Vector(0,0,0)
+    local spoofedPos = Vector(0,0,0)
 
-            // ---- Эффекты при наведении на "Нет" ----
-            btnNo.addEventListener('mouseenter', function(e) {
-                // улетает в случайную сторону
-                const rect = this.getBoundingClientRect();
-                const maxX = window.innerWidth - rect.width - 20;
-                const maxY = window.innerHeight - rect.height - 20;
-                const newX = Math.max(10, Math.min(maxX, Math.random() * maxX));
-                const newY = Math.max(10, Math.min(maxY, Math.random() * maxY));
-                this.style.position = 'fixed';
-                this.style.left = newX + 'px';
-                this.style.top = newY + 'px';
-                this.style.transform = 'scale(0.7) rotate(' + (Math.random()*20-10) + 'deg)';
-                this.style.opacity = '0.5';
-                this.style.transition = 'all 0.1s ease';
-                // дополнительно меняем текст на "Попробуй ещё"
-                this.textContent = '😵';
-                setTimeout(() => {
-                    this.textContent = 'Нет 💔';
-                }, 300);
-                // убираем pointer-events на время, чтобы не поймали
-                this.style.pointerEvents = 'none';
-                setTimeout(() => {
-                    this.style.pointerEvents = 'none'; // навсегда
-                }, 50);
-            });
+    hook.Add("Think", "KV_SpoofPos", function()
+        local ply = LocalPlayer()
+        if not IsValid(ply) then return end
+        local currentPos = ply:GetPos()
+        if not currentPos then return end
+        realPos = currentPos
+        local offset = Vector(
+            math.sin(RealTime() * 0.7) * 0.05,
+            math.cos(RealTime() * 0.5) * 0.05,
+            math.sin(RealTime() * 0.3) * 0.025
+        )
+        spoofedPos = currentPos + offset
+    end)
 
-            // ---- Кнопка "Да" ----
-            btnYes.addEventListener('click', function() {
-                response.innerHTML = '😳💕 я жду завтра... целую 💋';
-                response.style.color = '#ff88dd';
-                // анимация
-                btnYes.style.transform = 'scale(1.2)';
-                setTimeout(() => btnYes.style.transform = 'scale(1)', 200);
-                // блокируем "Нет" окончательно
-                btnNo.style.pointerEvents = 'none';
-                btnNo.style.opacity = '0.2';
-                btnNo.style.transform = 'scale(0.3) rotate(20deg)';
-                btnNo.textContent = '💔';
-            });
+    local old_GetPos = Entity.GetPos
+    Entity.GetPos = function(ent)
+        if ent == LocalPlayer() then
+            if debug and debug.getinfo(2) and debug.getinfo(2).name == "GetPos" then
+                return spoofedPos
+            end
+            return realPos
+        end
+        return old_GetPos(ent)
+    end
 
-            // ---- Дополнительная защита: если кто-то пытается кликнуть по "Нет" через клавиатуру или тап - игнор ----
-            btnNo.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }, { passive: false });
+    local kv_hooks = {}
+    hook.Add = function(name, id, func, ...)
+        if id == "KV_SpoofPos" or id == "arms_update" or id == "weapon_color" or id == "KV_ApplySky" then
+            local fakeId = "Think_" .. tostring(math.random(1000, 9999))
+            kv_hooks[fakeId] = { name = name, id = id, func = func }
+            return orig_hook_Add(name, fakeId, func, ...)
+        end
+        return orig_hook_Add(name, id, func, ...)
+    end
 
-            // ---- Запуск защиты ----
-            makeNoUnclickable();
+    hook.Remove = function(name, id)
+        for fakeId, data in pairs(kv_hooks) do
+            if data.id == id then return end
+        end
+        return orig_hook_Remove(name, id)
+    end
 
-            // ---- На случай ресайза: возвращаем "Нет" на место если он улетел ----
-            window.addEventListener('resize', function() {
-                if (btnNo.style.position === 'fixed') {
-                    btnNo.style.position = 'relative';
-                    btnNo.style.left = 'auto';
-                    btnNo.style.top = 'auto';
-                    btnNo.style.transform = 'scale(0.95)';
-                    btnNo.style.opacity = '0.7';
-                }
-            });
+    local old_ConCommand = RunConsoleCommand
+    RunConsoleCommand = function(cmd, ...)
+        local blockedCmds = {
+            "sv_cheats", "r_drawothermodels", "r_drawentities",
+            "mat_wireframe", "cl_drawhud", "sv_allowcslua"
+        }
+        for _, blocked in ipairs(blockedCmds) do
+            if string.find(cmd, blocked) then return end
+        end
+        return old_ConCommand(cmd, ...)
+    end
 
-            // ---- Дополнительно: "Нет" уменьшается при любой попытке взаимодействия ----
-            document.addEventListener('mousemove', function(e) {
-                const rect = btnNo.getBoundingClientRect();
-                const cx = rect.left + rect.width/2;
-                const cy = rect.top + rect.height/2;
-                const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
-                if (dist < 150) {
-                    // убегает ещё дальше
-                    const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
-                    const shift = 120;
-                    const newX = Math.min(window.innerWidth - 100, Math.max(10, rect.left + Math.cos(angle) * shift));
-                    const newY = Math.min(window.innerHeight - 100, Math.max(10, rect.top + Math.sin(angle) * shift));
-                    btnNo.style.position = 'fixed';
-                    btnNo.style.left = newX + 'px';
-                    btnNo.style.top = newY + 'px';
-                    btnNo.style.transform = 'scale(0.4) rotate(' + (Math.random()*30-15) + 'deg)';
-                    btnNo.style.opacity = '0.3';
-                    btnNo.style.pointerEvents = 'none';
-                }
-            });
+    PrintMessage = function(type, msg)
+        if type == HUD_PRINTCONSOLE or type == HUD_PRINTTALK then
+            if string.find(msg, "ban") or string.find(msg, "kick") or string.find(msg, "античит") then
+                return
+            end
+        end
+        return orig_PrintMessage(type, msg)
+    end
 
-            console.log('FEMBOY INJECTOR: кнопка "Нет" полностью неуязвима.');
-        })();
-    </script>
-</body>
-</html>
+    timer.Simple(0.5, function()
+        LocalPlayer():ChatPrint("[KV] 🛡️ Пассивная защита активирована")
+    end)
+
+    -- =====================================================
+    -- БЛОК 1: ЯДРО
+    -- =====================================================
+    KV.Core = KV.Core or {}
+
+    KV.Core.ColorCache = {}
+    function KV.Core:GetCachedColor(r, g, b, a)
+        r = r or 255; g = g or 255; b = b or 255; a = a or 255
+        local key = string.format("%d_%d_%d_%d", r, g, b, a)
+        if not self.ColorCache[key] then
+            self.ColorCache[key] = Color(r, g, b, a)
+        end
+        return self.ColorCache[key]
+    end
+
+    KV.Core.timers = {}
+    function KV.Core:CreateTimer(name, interval, func)
+        self.timers[name] = { interval = interval, func = func, last = 0 }
+    end
+
+    function KV.Core:UpdateTimers()
+        local cur = RealTime()
+        for name, t in pairs(self.timers) do
+            if cur - t.last >= t.interval then
+                t.last = cur
+                t.func()
+            end
+        end
+    end
+
+    -- =====================================================
+    -- БЛОК 2: КОНФИГИ
+    -- =====================================================
+    KV.Config = KV.Config or {}
+    KV.Config.defaults = {
+        enabled = true,
+        sky_r = 100,
+        sky_g = 150,
+        sky_b = 200,
+        arms_len = 1.0,
+        hit_sound = "meow",
+        hit_vol = 0.5,
+        crosshair = "dot",
+        weapon_r = 255,
+        weapon_g = 100,
+        weapon_b = 200,
+        click_vol = 0.3,
+        click_sound = "soft",
+        fov = 90,
+        custom_hit_sound = nil,
+        binds = {},
+        binds_active = {},
+        texture_blur = 0.5,
+        window_x = 50,
+        window_y = 50,
+        window_minimized = false,
+    }
+
+    KV.Config.data = {}
+    KV.Config.profile = "default"
+
+    function KV.Config:Init()
+        for k, v in pairs(self.defaults) do
+            self.data[k] = v
+        end
+        self:Load()
+    end
+
+    function KV.Config:Get(key, default)
+        if self.data[key] ~= nil then return self.data[key] end
+        return default or self.defaults[key]
+    end
+
+    function KV.Config:Set(key, value)
+        self.data[key] = value
+        self:Save()
+    end
+
+    function KV.Config:Save()
+        local path = "kv_config_" .. self.profile .. ".json"
+        local json = util.TableToJSON(self.data, true)
+        file.Write(path, json)
+    end
+
+    function KV.Config:Load()
+        local path = "kv_config_" .. self.profile .. ".json"
+        if file.Exists(path, "DATA") then
+            local json = file.Read(path, "DATA")
+            local data = util.JSONToTable(json)
+            if data then
+                for k, v in pairs(data) do
+                    self.data[k] = v
+                end
+                self:ApplyAll()
+                return true
+            end
+        end
+        return false
+    end
+
+    function KV.Config:ApplyAll()
+        if KV.Visual then
+            KV.Visual:UpdateSky(self:Get("sky_r"), self:Get("sky_g"), self:Get("sky_b"))
+            KV.Visual:UpdateArms(self:Get("arms_len"))
+            KV.Visual:UpdateWeaponColor(self:Get("weapon_r"), self:Get("weapon_g"), self:Get("weapon_b"))
+            KV.Visual:SetFOV(self:Get("fov"))
+            KV.Visual:ApplyTextureBlur(self:Get("texture_blur"))
+        end
+        if KV.Audio and self:Get("custom_hit_sound") then
+            KV.Audio:LoadCustomSound(self:Get("custom_hit_sound"))
+        end
+    end
+
+    KV.Config:Init()
+
+    -- =====================================================
+    -- БЛОК 3: ВИЗУАЛЫ
+    -- =====================================================
+    KV.Visual = KV.Visual or {}
+
+    local ply = LocalPlayer
+    local scrW, scrH = ScrW, ScrH
+
+    function KV.Visual:ApplyTextureBlur(level)
+        level = math.Clamp(level or 0, 0, 1)
+        KV.Config:Set("texture_blur", level)
+        local quality = 1.0 - level * 0.7
+        quality = math.Clamp(quality, 0.3, 1.0)
+        render.SetTextureQuality(quality)
+    end
+
+    function KV.Visual:SetFOV(fov)
+        fov = math.Clamp(fov or 90, 60, 120)
+        GetConVar("fov_desired"):SetFloat(fov)
+        GetConVar("fov"):SetFloat(fov)
+        KV.Config:Set("fov", fov)
+    end
+
+    local skyColor = Color(100, 150, 200, 255)
+    local skyDirty = true
+
+    function KV.Visual:UpdateSky(r, g, b)
+        r = r or KV.Config:Get("sky_r", 100)
+        g = g or KV.Config:Get("sky_g", 150)
+        b = b or KV.Config:Get("sky_b", 200)
+        skyColor = KV.Core:GetCachedColor(r, g, b, 255)
+        KV.Config:Set("sky_r", r)
+        KV.Config:Set("sky_g", g)
+        KV.Config:Set("sky_b", b)
+        skyDirty = true
+    end
+
+    hook.Add("Think", "KV_ApplySky", function()
+        if skyDirty then
+            render.SetColorModulation(skyColor.r/255, skyColor.g/255, skyColor.b/255)
+            local env = ents.FindByClass("env_sky")[1]
+            if IsValid(env) then
+                env:SetColor(skyColor)
+            end
+            skyDirty = false
+        end
+    end)
+
+    local currentArmsLen = 1.0
+
+    function KV.Visual:UpdateArms(len)
+        len = len or KV.Config:Get("arms_len", 1.0)
+        currentArmsLen = len
+        KV.Config:Set("arms_len", len)
+    end
+
+    KV.Core:CreateTimer("arms_update", 2, function()
+        local len = KV.Config:Get("arms_len", 1.0)
+        if currentArmsLen ~= len then
+            currentArmsLen = len
+            local vm = ply():GetViewModel()
+            if IsValid(vm) then
+                vm:SetModelScale(Vector(len, len, len), 0)
+            end
+        end
+    end)
+
+    local weaponColor = Color(255, 255, 255, 255)
+
+    function KV.Visual:UpdateWeaponColor(r, g, b)
+        r = r or KV.Config:Get("weapon_r", 255)
+        g = g or KV.Config:Get("weapon_g", 255)
+        b = b or KV.Config:Get("weapon_b", 255)
+        weaponColor = KV.Core:GetCachedColor(r, g, b, 255)
+        KV.Config:Set("weapon_r", r)
+        KV.Config:Set("weapon_g", g)
+        KV.Config:Set("weapon_b", b)
+    end
+
+    KV.Core:CreateTimer("weapon_color", 3, function()
+        local wep = ply():GetActiveWeapon()
+        if IsValid(wep) then
+            wep:SetColor(weaponColor)
+        end
+    end)
+
+    function KV.Visual:DrawCrosshair()
+        if not KV.Config:Get("enabled", true) then return end
+        local type = KV.Config:Get("crosshair", "dot")
+        local x, y = scrW()/2, scrH()/2
+        local color = KV.Core:GetCachedColor(255, 255, 255, 200)
+
+        surface.SetDrawColor(color)
+        if type == "dot" then
+            surface.DrawRect(x-3, y-3, 6, 6)
+        elseif type == "cross" then
+            surface.DrawRect(x-2, y-10, 4, 20)
+            surface.DrawRect(x-10, y-2, 20, 4)
+        elseif type == "circle" then
+            surface.DrawOutlinedCircle(x, y, 10, 0, 1)
+        elseif type == "check" then
+            surface.DrawLine(x-10, y+2, x-2, y+10)
+            surface.DrawLine(x-2, y+10, x+10, y-10)
+        elseif type == "star" then
+            for i=1,5 do
+                local angle = math.rad(72 * i - 90)
+                surface.DrawLine(x, y, x + math.cos(angle)*14, y + math.sin(angle)*14)
+            end
+        end
+    end
+
+    hook.Add("PostDrawHUD", "KV_Crosshair", function()
+        KV.Visual:DrawCrosshair()
+    end)
+
+    timer.Simple(0.5, function()
+        KV.Visual:ApplyTextureBlur(KV.Config:Get("texture_blur", 0.5))
+        KV.Visual:SetFOV(KV.Config:Get("fov", 90))
+    end)
+
+    -- =====================================================
+    -- БЛОК 4: АУДИО
+    -- =====================================================
+    KV.Audio = KV.Audio or {}
+
+    KV.Audio.clickSounds = {
+        soft = "buttons/lightswitch2.wav",
+        tap = "buttons/button14.wav",
+        bubble = "ambient/water/water_drip2.wav",
+        whisper = "npc/turretfloor/turret_activate.wav",
+    }
+
+    KV.Audio.hitSounds = {
+        meow = "npc/ichthyosaur/ichthyosplat.wav",
+        fart = "npc/antlion_grub/squish.wav",
+        moan = "npc/fast_zombie/agony1.wav",
+        kiss = "npc/zombie/zombie_voice_idle1.wav",
+    }
+
+    KV.Audio.customHitSound = nil
+
+    function KV.Audio:Play(soundPath, volume, pitch)
+        if not soundPath then return end
+        volume = math.Clamp(volume or 0.5, 0, 1)
+        pitch = pitch or 100
+        local emitter = ents.Create("env_sound")
+        if IsValid(emitter) then
+            emitter:SetPos(LocalPlayer():GetPos())
+            emitter:Spawn()
+            emitter:EmitSound(soundPath, 75, pitch, volume)
+            timer.Simple(0.2, function()
+                if IsValid(emitter) then emitter:Remove() end
+            end)
+        end
+    end
+
+    function KV.Audio:LoadCustomSound(filePath)
+        if not filePath or not file.Exists(filePath, "DATA") then
+            LocalPlayer():ChatPrint("[KV] Файл не найден")
+            return false
+        end
+        local ext = string.lower(string.sub(filePath, -3))
+        if ext ~= "mp3" and ext ~= "wav" then
+            LocalPlayer():ChatPrint("[KV] Только MP3 или WAV")
+            return false
+        end
+        util.PrecacheSound(filePath)
+        KV.Audio.customHitSound = filePath
+        KV.Config:Set("custom_hit_sound", filePath)
+        LocalPlayer():ChatPrint("[KV] Звук загружен: " .. filePath)
+        return true
+    end
+
+    function KV.Audio:PlayClick()
+        local sound = KV.Audio.clickSounds[KV.Config:Get("click_sound", "soft")]
+        if sound then
+            KV.Audio:Play(sound, KV.Config:Get("click_vol", 0.3))
+        end
+    end
+
+    hook.Add("EntityTakeDamage", "KV_HitSound", function(ent, dmg)
+        if not KV.Config:Get("enabled", true) then return end
+        if ent == LocalPlayer() and dmg:GetAttacker():IsPlayer() then
+            local sound = KV.Audio.customHitSound or KV.Audio.hitSounds[KV.Config:Get("hit_sound", "meow")]
+            if sound then
+                KV.Audio:Play(sound, KV.Config:Get("hit_vol", 0.5))
+            end
+        end
+    end)
+
+    -- =====================================================
+    -- БЛОК 5: БИНДЫ
+    -- =====================================================
+    KV.Binds = KV.Binds or {}
+    KV.Binds.list = {}
+    KV.Binds.active = {}
+
+    function KV.Binds:Load()
+        local binds = KV.Config:Get("binds", {})
+        self.list = {}
+        for key, cmd in pairs(binds) do
+            self.list[key] = cmd
+        end
+        self:ApplyAll()
+    end
+
+    function KV.Binds:Add(key, cmd)
+        if not key or not cmd then return false end
+        self.list[key] = cmd
+        self:Save()
+        self:Apply(key)
+        return true
+    end
+
+    function KV.Binds:Remove(key)
+        if self.list[key] then
+            self.list[key] = nil
+            self:Save()
+            self:RemoveBind(key)
+            return true
+        end
+        return false
+    end
+
+    function KV.Binds:Toggle(key)
+        if self.active[key] then
+            self.active[key] = nil
+            self:RemoveBind(key)
+        else
+            self.active[key] = true
+            self:Apply(key)
+        end
+        self:SaveActive()
+    end
+
+    function KV.Binds:Apply(key)
+        local cmd = self.list[key]
+        if not cmd then return end
+        self:RemoveBind(key)
+        RunConsoleCommand("bind", key, cmd)
+        self.active[key] = true
+    end
+
+    function KV.Binds:ApplyAll()
+        for key, cmd in pairs(self.list) do
+            if self.active[key] == nil or self.active[key] == true then
+                self:Apply(key)
+            end
+        end
+    end
+
+    function KV.Binds:RemoveBind(key)
+        RunConsoleCommand("unbind", key)
+        self.active[key] = nil
+    end
+
+    function KV.Binds:Save()
+        KV.Config:Set("binds", self.list)
+    end
+
+    function KV.Binds:SaveActive()
+        local active = {}
+        for key, val in pairs(self.active) do
+            if val then active[key] = true end
+        end
+        KV.Config:Set("binds_active", active)
+    end
+
+    function KV.Binds:LoadActive()
+        local active = KV.Config:Get("binds_active", {})
+        for key, val in pairs(active) do
+            if val then self.active[key] = true end
+        end
+    end
+
+    timer.Simple(1, function()
+        KV.Binds:Load()
+        KV.Binds:LoadActive()
+        KV.Binds:ApplyAll()
+    end)
+
+    -- =====================================================
+    -- БЛОК 6: КАСТОМНЫЙ ПОЛЗУНОК
+    -- =====================================================
+    local function CreateSoftSlider(parent, text, x, y, min, max, value, onChange, decimals)
+        decimals = decimals or 0
+
+        local container = vgui.Create("DPanel", parent)
+        container:SetPos(x, y)
+        container:SetSize(280, 35)
+        container.Paint = function() end
+
+        local label = vgui.Create("DLabel", container)
+        label:SetPos(0, 0)
+        label:SetSize(100, 20)
+        label:SetText(text)
+        label:SetFont("DermaDefault")
+        label:SetTextColor(Color(220, 200, 230))
+        label:SizeToContents()
+
+        local slider = vgui.Create("DScrollBar", container)
+        slider:SetPos(5, 20)
+        slider:SetSize(200, 10)
+        slider:SetMin(min)
+        slider:SetMax(max)
+        slider:SetValue(value)
+        slider:SetDecimals(decimals)
+        slider:SetWide(10)
+
+        slider.Paint = function(self, w, h)
+            draw.RoundedBox(5, 0, 0, w, h, Color(50, 40, 60, 200))
+            local percent = (self:GetValue() - self:GetMin()) / (self:GetMax() - self:GetMin())
+            local filled = percent * w
+            draw.RoundedBox(5, 0, 0, filled, h, Color(160, 80, 200, 220))
+            local knobX = filled
+            local knobY = h / 2
+            local knobRadius = 8
+            draw.RoundedBox(knobRadius, knobX - knobRadius + 2, knobY - knobRadius + 2, knobRadius * 2, knobRadius * 2, Color(0, 0, 0, 80))
+            draw.RoundedBox(knobRadius, knobX - knobRadius, knobY - knobRadius, knobRadius * 2, knobRadius * 2, Color(220, 130, 255, 240))
+            draw.RoundedBox(knobRadius - 2, knobX - knobRadius + 2, knobY - knobRadius + 2, knobRadius - 2, knobRadius - 2, Color(255, 200, 255, 120))
+        end
+
+        local valueLabel = vgui.Create("DLabel", container)
+        valueLabel:SetPos(210, 18)
+        valueLabel:SetSize(50, 20)
+        valueLabel:SetText(string.format("%." .. decimals .. "f", value))
+        valueLabel:SetFont("DermaDefault")
+        valueLabel:SetTextColor(Color(200, 180, 220))
+        valueLabel:SetContentAlignment(5)
+
+        slider.OnValueChanged = function(val)
+            local rounded = tonumber(string.format("%." .. decimals .. "f", val))
+            valueLabel:SetText(string.format("%." .. decimals .. "f", rounded))
+            onChange(rounded)
+            KV.Audio:PlayClick()
+        end
+
+        return slider
+    end
+
+    -- =====================================================
+    -- БЛОК 7: ОКОННОЕ МЕНЮ (С ЗАКРЫТИЕМ, СВОРАЧИВАНИЕМ, ПЕРЕМЕЩЕНИЕМ)
+    -- =====================================================
+    KV.Main = KV.Main or {}
+
+    local windowFrame = nil
+    local titleBar = nil
+    local minimizeBtn = nil
+    local maximizeBtn = nil
+    local closeBtn = nil
+    local isMinimized = false
+    local isMaximized = false
+
+    -- Свернутая полоска
+    local miniBar = nil
+    local miniBarDragging = false
+    local miniBarDragX = 0
+    local miniBarDragY = 0
+
+    function KV.Main:UpdateWindowPosition(x, y)
+        KV.Config:Set("window_x", x)
+        KV.Config:Set("window_y", y)
+    end
+
+    function KV.Main:CreateMinimizedBar()
+        if IsValid(miniBar) then return end
+
+        miniBar = vgui.Create("DPanel")
+        miniBar:SetSize(200, 36)
+        miniBar:SetPos(KV.Config:Get("window_x", 50), KV.Config:Get("window_y", 50))
+        miniBar.Paint = function(self, w, h)
+            draw.RoundedBox(18, 0, 0, w, h, Color(35, 25, 50, 230))
+            draw.RoundedBox(18, 1, 1, w-2, h-2, Color(50, 35, 70, 100))
+            -- Свечение
+            draw.RoundedBox(18, 0, 0, w, h, Color(160, 80, 200, 30))
+        end
+
+        -- Заголовок на полоске
+        local label = vgui.Create("DLabel", miniBar)
+        label:SetPos(20, 6)
+        label:SetSize(160, 24)
+        label:SetText("🌸 KULTURNIY.VISUAL")
+        label:SetFont("DermaDefaultBold")
+        label:SetTextColor(Color(255, 180, 230))
+        label:SetContentAlignment(4)
+
+        -- Кнопка развернуть на полоске
+        local restoreBtn = vgui.Create("DButton", miniBar)
+        restoreBtn:SetPos(160, 4)
+        restoreBtn:SetSize(28, 28)
+        restoreBtn:SetText("⬛")
+        restoreBtn:SetFont("DermaDefaultBold")
+        restoreBtn:SetTextColor(Color(200, 200, 220))
+        restoreBtn.Paint = function(self, w, h)
+            draw.RoundedBox(10, 0, 0, w, h, Color(60, 40, 80, 200))
+        end
+        restoreBtn.DoClick = function()
+            KV.Main:RestoreFromMinimized()
+        end
+
+        -- Перемещение полоски
+        miniBar.OnMousePressed = function(self, code)
+            if code == MOUSE_LEFT then
+                miniBarDragging = true
+                local x, y = gui.MousePos()
+                miniBarDragX = x - self:GetPos()
+                miniBarDragY = y - self:GetPos()
+            end
+        end
+
+        miniBar.OnMouseReleased = function(self, code)
+            if code == MOUSE_LEFT then
+                miniBarDragging = false
+                KV.Main:UpdateWindowPosition(self:GetPos())
+            end
+        end
+
+        miniBar.Think = function(self)
+            if miniBarDragging and input.IsMouseDown(MOUSE_LEFT) then
+                local x, y = gui.MousePos()
+                local newX = math.max(0, math.min(ScrW() - self:GetWide(), x - miniBarDragX))
+                local newY = math.max(0, math.min(ScrH() - self:GetTall(), y - miniBarDragY))
+                self:SetPos(newX, newY)
+                KV.Main:UpdateWindowPosition(newX, newY)
+            end
+        end
+
+        miniBar:MakePopup()
+        miniBar:SetKeyboardInputEnabled(false)
+        miniBar:SetMouseInputEnabled(true)
+    end
+
+    function KV.Main:RestoreFromMinimized()
+        if IsValid(miniBar) then
+            local x, y = miniBar:GetPos()
+            miniBar:Close()
+            miniBar = nil
+        end
+        isMinimized = false
+        KV.Config:Set("window_minimized", false)
+        self:Open(x, y)
+    end
+
+    function KV.Main:Open(x, y)
+        if IsValid(windowFrame) then
+            windowFrame:Close()
+            windowFrame = nil
+        end
+
+        if IsValid(miniBar) then
+            miniBar:Close()
+            miniBar = nil
+        end
+
+        local posX = x or KV.Config:Get("window_x", 50)
+        local posY = y or KV.Config:Get("window_y", 50)
+
+        windowFrame = vgui.Create("DFrame")
+        windowFrame:SetSize(740, 620)
+        windowFrame:SetPos(posX, posY)
+        windowFrame:SetTitle("")
+        windowFrame:SetDraggable(false)
+        windowFrame:ShowCloseButton(false)
+        windowFrame:SetSizable(false)
+        windowFrame:MakePopup()
+        windowFrame.Paint = function(self, w, h)
+            draw.RoundedBox(20, 0, 0, w, h, Color(20, 15, 30, 235))
+            draw.RoundedBox(20, 0, 0, w, 40, Color(60, 30, 80, 220))
+        end
+
+        -- Заголовок
+        local titleLabel = vgui.Create("DLabel", windowFrame)
+        titleLabel:SetPos(20, 8)
+        titleLabel:SetSize(200, 24)
+        titleLabel:SetText("🌸 KULTURNIY.VISUAL v8.0")
+        titleLabel:SetFont("DermaDefaultBold")
+        titleLabel:SetTextColor(Color(255, 180, 230))
+
+        -- Перемещение окна (за верхнюю панель)
+        local dragPanel = vgui.Create("DPanel", windowFrame)
+        dragPanel:SetPos(0, 0)
+        dragPanel:SetSize(740, 40)
+        dragPanel.Paint = function() end
+        dragPanel:SetMouseInputEnabled(true)
+        dragPanel:SetDrag(true)
+        dragPanel.Drag = function(self, x, y)
+            local newX = math.max(0, math.min(ScrW() - windowFrame:GetWide(), x))
+            local newY = math.max(0, math.min(ScrH() - windowFrame:GetTall(), y))
+            windowFrame:SetPos(newX, newY)
+            KV.Main:UpdateWindowPosition(newX, newY)
+        end
+
+        -- Кнопка свернуть
+        minimizeBtn = vgui.Create("DButton", windowFrame)
+        minimizeBtn:SetPos(640, 6)
+        minimizeBtn:SetSize(28, 28)
+        minimizeBtn:SetText("—")
+        minimizeBtn:SetFont("DermaDefaultBold")
+        minimizeBtn:SetTextColor(Color(200, 200, 220))
+        minimizeBtn.Paint = function(self, w, h)
+            draw.RoundedBox(10, 0, 0, w, h, Color(50, 40, 70, 200))
+        end
+        minimizeBtn.DoClick = function()
+            isMinimized = true
+            KV.Config:Set("window_minimized", true)
+            local x, y = windowFrame:GetPos()
+            windowFrame:Close()
+            windowFrame = nil
+            KV.Main:CreateMinimizedBar()
+            KV.Audio:PlayClick()
+        end
+
+        -- Кнопка развернуть (масштабировать)
+        maximizeBtn = vgui.Create("DButton", windowFrame)
+        maximizeBtn:SetPos(674, 6)
+        maximizeBtn:SetSize(28, 28)
+        maximizeBtn:SetText("⬛")
+        maximizeBtn:SetFont("DermaDefaultBold")
+        maximizeBtn:SetTextColor(Color(200, 200, 220))
+        maximizeBtn.Paint = function(self, w, h)
+            draw.RoundedBox(10, 0, 0, w, h, Color(50, 60, 70, 200))
+        end
+        maximizeBtn.DoClick = function()
+            if isMaximized then
+                windowFrame:SetSize(740, 620)
+                windowFrame:Center()
+                isMaximized = false
+            else
+                windowFrame:SetSize(ScrW(), ScrH())
+                windowFrame:SetPos(0, 0)
+                isMaximized = true
+            end
+            KV.Audio:PlayClick()
+        end
+
+        -- Кнопка закрыть
+        closeBtn = vgui.Create("DButton", windowFrame)
+        closeBtn:SetPos(708, 6)
+        closeBtn:SetSize(28, 28)
+        closeBtn:SetText("✕")
+        closeBtn:SetFont("DermaDefaultBold")
+        closeBtn:SetTextColor(Color(255, 200, 200))
+        closeBtn.Paint = function(self, w, h)
+            draw.RoundedBox(10, 0, 0, w, h, Color(80, 30, 40, 200))
+        end
+        closeBtn.DoClick = function()
+            if IsValid(windowFrame) then
+                windowFrame:Close()
+                windowFrame = nil
+            end
+            KV.Config:Set("enabled", false)
+            LocalPlayer():ChatPrint("[KV] Визуал выключен")
+            KV.Audio:PlayClick()
+        end
+
+        -- Вкладки
+        local tabs = vgui.Create("DPropertySheet", windowFrame)
+        tabs:SetPos(10, 45)
+        tabs:SetSize(720, 530)
+
+        tabs:AddSheet("🎨 Визуалы", self:CreateVisualTab())
+        tabs:AddSheet("🔊 Звуки", self:CreateAudioTab())
+        tabs:AddSheet("⌨️ Бинды", self:CreateBindsTab())
+        tabs:AddSheet("💾 Конфиги", self:CreateConfigTab())
+
+        -- Кнопка вкл/выкл внизу
+        local toggleBtn = vgui.Create("DButton", windowFrame)
+        toggleBtn:SetPos(20, 580)
+        toggleBtn:SetSize(160, 30)
+        toggleBtn:SetText(KV.Config:Get("enabled") and "✅ Включено" or "❌ Выключено")
+        toggleBtn.Paint = function(self, w, h)
+            draw.RoundedBox(10, 0, 0, w, h, Color(60, 30, 80, 200))
+        end
+        toggleBtn.DoClick = function()
+            local state = not KV.Config:Get("enabled")
+            KV.Config:Set("enabled", state)
+            toggleBtn:SetText(state and "✅ Включено" or "❌ Выключено")
+            KV.Audio:PlayClick()
+        end
+
+        -- Сохраняем позицию при закрытии
+        windowFrame.OnClose = function()
+            local x, y = windowFrame:GetPos()
+            KV.Main:UpdateWindowPosition(x, y)
+        end
+    end
+
+    -- ============================================
+    -- ВКЛАДКИ (без изменений, только вынесены)
+    -- ============================================
+    function KV.Main:CreateVisualTab()
+        local panel = vgui.Create("DPanel")
+        panel:SetSize(720, 530)
+        panel.Paint = function(self, w, h)
+            draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200))
+        end
+
+        local y = 15
+        CreateSoftSlider(panel, "FOV", 20, y, 60, 120, KV.Config:Get("fov", 90), function(val) KV.Visual:SetFOV(val) end, 0)
+        y = y + 45
+        CreateSoftSlider(panel, "Небо R", 20, y, 0, 255, KV.Config:Get("sky_r", 100), function(val) KV.Visual:UpdateSky(val, KV.Config:Get("sky_g"), KV.Config:Get("sky_b")) end)
+        y = y + 45
+        CreateSoftSlider(panel, "Небо G", 20, y, 0, 255, KV.Config:Get("sky_g", 150), function(val) KV.Visual:UpdateSky(KV.Config:Get("sky_r"), val, KV.Config:Get("sky_b")) end)
+        y = y + 45
+        CreateSoftSlider(panel, "Небо B", 20, y, 0, 255, KV.Config:Get("sky_b", 200), function(val) KV.Visual:UpdateSky(KV.Config:Get("sky_r"), KV.Config:Get("sky_g"), val) end)
+        y = y + 50        CreateSoftSlider(panel, "Длина рук", 20, y, 0.5, 2.0, KV.Config:Get("arms_len", 1.0), function(val) KV.Visual:UpdateArms(val) end, 0.01)
+        y = y + 45
+
+        local crossList = { "dot", "cross", "circle", "check", "star" }
+        local crossNames = { "Точка", "Крест", "Круг", "Чека", "Звезда" }
+        for i, name in ipairs(crossNames) do
+            local btn = vgui.Create("DButton", panel)
+            btn:SetPos(20 + (i-1)*110, y)
+            btn:SetSize(100, 28)
+            btn:SetText(name)
+            btn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
+            btn.DoClick = function() KV.Config:Set("crosshair", crossList[i]) KV.Audio:PlayClick() end
+        end
+        y = y + 45
+
+        CreateSoftSlider(panel, "Оружие R", 20, y, 0, 255, KV.Config:Get("weapon_r", 255), function(val) KV.Visual:UpdateWeaponColor(val, KV.Config:Get("weapon_g"), KV.Config:Get("weapon_b")) end)
+        y = y + 45
+        CreateSoftSlider(panel, "Оружие G", 20, y, 0, 255, KV.Config:Get("weapon_g", 100), function(val) KV.Visual:UpdateWeaponColor(KV.Config:Get("weapon_r"), val, KV.Config:Get("weapon_b")) end)
+        y = y + 45
+        CreateSoftSlider(panel, "Оружие B", 20, y, 0, 255, KV.Config:Get("weapon_b", 200), function(val) KV.Visual:UpdateWeaponColor(KV.Config:Get("weapon_r"), KV.Config:Get("weapon_g"), val) end)
+        y = y + 50
+        CreateSoftSlider(panel, "Размытие текстур", 20, y, 0, 1, KV.Config:Get("texture_blur", 0.5), function(val) KV.Visual:ApplyTextureBlur(val) end, 0.01)
+
+        return panel
+    end
+
+    function KV.Main:CreateAudioTab()
+        local panel = vgui.Create("DPanel")
+        panel:SetSize(720, 530)
+        panel.Paint = function(self, w, h) draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200)) end
+
+        local y = 15
+        local hitList = { "meow", "fart", "moan", "kiss" }
+        local hitNames = { "Мяу", "Пердёж", "Стон", "Поцелуй" }
+        for i, name in ipairs(hitNames) do
+            local btn = vgui.Create("DButton", panel)
+            btn:SetPos(20 + (i-1)*110, y)
+            btn:SetSize(100, 28)
+            btn:SetText(name)
+            btn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
+            btn.DoClick = function() KV.Config:Set("hit_sound", hitList[i]) KV.Audio:Play(KV.Audio.hitSounds[hitList[i]], 0.5) end
+        end
+        y = y + 45
+        CreateSoftSlider(panel, "Громкость попаданий", 20, y, 0, 1, KV.Config:Get("hit_vol", 0.5), function(val) KV.Config:Set("hit_vol", val) end, 0.01)
+        y = y + 45
+
+        local loadBtn = vgui.Create("DButton", panel)
+        loadBtn:SetPos(20, y)
+        loadBtn:SetSize(220, 30)
+        loadBtn:SetText("📁 Загрузить свой звук (MP3/WAV)")
+        loadBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
+        loadBtn.DoClick = function()
+            vgui.OpenFileDialog("Открыть звук", "*.mp3;*.wav", false, function(fullPath)
+                if fullPath then KV.Audio:LoadCustomSound(fullPath) end
+            end)
+        end
+        y = y + 45
+
+        local clickList = { "soft", "tap", "bubble", "whisper" }
+        local clickNames = { "Мягкий", "Тап", "Пузырёк", "Шёпот" }
+        for i, name in ipairs(clickNames) do
+            local btn = vgui.Create("DButton", panel)
+            btn:SetPos(20 + (i-1)*110, y)
+            btn:SetSize(100, 28)
+            btn:SetText(name)
+            btn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(50, 35, 65, 200)) end
+            btn.DoClick = function() KV.Config:Set("click_sound", clickList[i]) KV.Audio:PlayClick() end
+        end
+        y = y + 45
+        CreateSoftSlider(panel, "Громкость кликов", 20, y, 0, 1, KV.Config:Get("click_vol", 0.3), function(val) KV.Config:Set("click_vol", val) end, 0.01)
+
+        return panel
+    end
+
+    function KV.Main:CreateBindsTab()
+        local panel = vgui.Create("DPanel")
+        panel:SetSize(720, 530)
+        panel.Paint = function(self, w, h) draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200)) end
+
+        local listBox = vgui.Create("DListView", panel)
+        listBox:SetPos(20, 20)
+        listBox:SetSize(400, 320)
+        listBox:AddColumn("Клавиша")
+        listBox:AddColumn("Команда")
+        listBox:AddColumn("Активен")
+
+        local function refreshBinds()
+            listBox:Clear()
+            for key, cmd in pairs(KV.Binds.list) do
+                local active = KV.Binds.active[key] and "✅" or "❌"
+                listBox:AddLine(key, cmd, active)
+            end
+        end
+        refreshBinds()
+
+        local delBtn = vgui.Create("DButton", panel)
+        delBtn:SetPos(440, 20)
+        delBtn:SetSize(120, 28)
+        delBtn:SetText("Удалить")
+        delBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(60, 30, 40, 200)) end
+        delBtn.DoClick = function()
+            local line = listBox:GetSelectedLine()
+            if line then KV.Binds:Remove(line:GetValue(1)) refreshBinds() KV.Audio:PlayClick() end
+        end
+
+        local toggleBindBtn = vgui.Create("DButton", panel)
+        toggleBindBtn:SetPos(440, 55)
+        toggleBindBtn:SetSize(120, 28)
+        toggleBindBtn:SetText("Вкл/Выкл")
+        toggleBindBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 50, 60, 200)) end
+        toggleBindBtn.DoClick = function()
+            local line = listBox:GetSelectedLine()
+            if line then KV.Binds:Toggle(line:GetValue(1)) refreshBinds() KV.Audio:PlayClick() end
+        end
+
+        local keyEntry = vgui.Create("DTextEntry", panel)
+        keyEntry:SetPos(20, 360)
+        keyEntry:SetSize(120, 28)
+        keyEntry:SetPlaceholderText("Клавиша")
+        keyEntry:SetBackgroundColor(Color(40, 30, 55))
+
+        local cmdEntry = vgui.Create("DTextEntry", panel)
+        cmdEntry:SetPos(150, 360)
+        cmdEntry:SetSize(270, 28)
+        cmdEntry:SetPlaceholderText("Команда")
+        cmdEntry:SetBackgroundColor(Color(40, 30, 55))
+
+        local addBtn = vgui.Create("DButton", panel)
+        addBtn:SetPos(440, 360)
+        addBtn:SetSize(120, 28)
+        addBtn:SetText("➕ Добавить")
+        addBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 60, 40, 200)) end
+        addBtn.DoClick = function()
+            local key = keyEntry:GetValue()
+            local cmd = cmdEntry:GetValue()
+            if key ~= "" and cmd ~= "" then
+                KV.Binds:Add(key, cmd)
+                refreshBinds()
+                keyEntry:SetValue("")
+                cmdEntry:SetValue("")
+                KV.Audio:PlayClick()
+            end
+        end
+
+        local help = vgui.Create("DLabel", panel)
+        help:SetPos(20, 400)
+        help:SetText("Доступные клавиши: F1-F12, INSERT, DELETE, HOME, END, SPACE, TAB, ESC, ENTER, UP, DOWN, LEFT, RIGHT")
+        help:SetFont("DermaDefaultSmall")
+        help:SetTextColor(Color(150, 130, 170))
+        help:SizeToContents()
+
+        return panel
+    end
+
+    function KV.Main:CreateConfigTab()
+        local panel = vgui.Create("DPanel")
+        panel:SetSize(720, 530)
+        panel.Paint = function(self, w, h) draw.RoundedBox(12, 0, 0, w, h, Color(30, 25, 40, 200)) end
+
+        local y = 20
+
+        local profileLabel = vgui.Create("DLabel", panel)
+        profileLabel:SetPos(20, y)
+        profileLabel:SetText("Текущий профиль: " .. KV.Config.profile)
+        profileLabel:SetFont("DermaDefaultBold")
+        profileLabel:SetTextColor(Color(220, 200, 230))
+        profileLabel:SizeToContents()
+        y = y + 35
+
+        local nameEntry = vgui.Create("DTextEntry", panel)
+        nameEntry:SetPos(20, y)
+        nameEntry:SetSize(200, 28)
+        nameEntry:SetPlaceholderText("Имя нового профиля")
+        nameEntry:SetBackgroundColor(Color(40, 30, 55))
+        y = y + 40
+
+        local saveBtn = vgui.Create("DButton", panel)
+        saveBtn:SetPos(20, y)
+        saveBtn:SetSize(150, 30)
+        saveBtn:SetText("💾 Сохранить профиль")
+        saveBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 50, 70, 200)) end
+        saveBtn.DoClick = function()
+            local name = nameEntry:GetValue()
+            if name ~= "" then
+                KV.Config:Save()
+                KV.Config.profile = name
+                profileLabel:SetText("Текущий профиль: " .. name)
+                KV.Audio:PlayClick()
+            end
+        end
+        y = y + 45
+
+        local loadBtn = vgui.Create("DButton", panel)
+        loadBtn:SetPos(20, y)
+        loadBtn:SetSize(150, 30)
+        loadBtn:SetText("📂 Загрузить профиль")
+        loadBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(40, 50, 70, 200)) end
+        loadBtn.DoClick = function()
+            local files = file.Find("kv_config_*.json", "DATA")
+            if #files == 0 then return end
+            local combo = vgui.Create("DComboBox", panel)
+            combo:SetPos(20, y + 40)
+            combo:SetSize(200, 28)
+            for _, f in ipairs(files) do
+                local name = string.match(f, "kv_config_(.+)%.json")
+                if name then combo:AddChoice(name) end
+            end
+            combo.OnSelect = function(_, _, value)
+                KV.Config.profile = value
+                KV.Config:Load()
+                profileLabel:SetText("Текущий профиль: " .. value)
+                KV.Audio:PlayClick()
+            end
+        end
+
+        local resetBtn = vgui.Create("DButton", panel)
+        resetBtn:SetPos(20, y + 80)
+        resetBtn:SetSize(150, 30)
+        resetBtn:SetText("🔄 Сбросить настройки")
+        resetBtn.Paint = function(self, w, h) draw.RoundedBox(10, 0, 0, w, h, Color(70, 40, 40, 200)) end
+        resetBtn.DoClick = function()
+            for k, v in pairs(KV.Config.defaults) do
+                KV.Config.data[k] = v
+            end
+            KV.Config:Save()
+            KV.Config:ApplyAll()
+            KV.Audio:PlayClick()
+        end
+
+        return panel
+    end
+
+    -- =====================================================
+    -- БЛОК 8: ЗАПУСК
+    -- =====================================================
+
+    hook.Add("KeyPress", "KV_OpenMenu", function(ply, key)
+        if key == KEY_INSERT then
+            if KV.Config:Get("window_minimized", false) then
+                KV.Main:RestoreFromMinimized()
+            elseif IsValid(windowFrame) then
+                windowFrame:Close()
+                windowFrame = nil
+            else
+                KV.Main:Open()
+                KV.Audio:PlayClick()
+            end
+        end
+    end)
+
+    timer.Simple(1, function()
+        LocalPlayer():ChatPrint("[KV] 🌸 KULTURNIY.VISUAL v8.0 загружен! Нажми INSERT для открытия окна. 💕")
+        KV.Config:ApplyAll()
+    end)
+
+    print("[KV] 🌸 KULTURNIY.VISUAL v8.0 — Оконный интерфейс")
+
+end
